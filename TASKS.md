@@ -45,13 +45,13 @@
 - **Validation:** `pytest tests/test_rag_policies.py -v`
 - **Commit:** `feat(rag): build hybrid retriever (BM25 + FAISS) for store policies PDF`
 
-## [ ] Task 4: Defense-in-Depth (Guardrails, Rate Limiter, Semantic Cache & PII Masking)
+## [x] Task 4: Defense-in-Depth (Guardrails, Rate Limiter, Semantic Cache & PII Masking)
 **Objective:** Ensure runtime protection against Prompt Injection/Jailbreak, LGPD PII compliance, and FinOps token savings.
-- [ ] Implement `src/security/rate_limiter.py` (in-memory Sliding Window per `session_id` + maximum character payload limit).
-- [ ] Implement `src/security/guardrails.py` blocking SQL Injection patterns, Jailbreak attempts, System Prompt extraction, and out-of-scope topics while preserving the musical specialist persona.
-- [ ] Implement `src/security/pii_anonymizer.py` (compatible with Microsoft Presidio + regex recognizers for Brazilian CPF, email, and phone numbers) to sanitize logs and telemetry without breaking in-memory DuckDB lookups.
-- [ ] Implement `src/cache/semantic_cache.py` in memory (cosine similarity threshold >= 0.92) with a **strict Transactional/PII Bypass Rule**: never cache queries or responses containing CPF, order IDs, personal data, or live order/stock lookups.
-- [ ] Create unit tests in `tests/test_security_and_cache.py` verifying jailbreak blocking, CPF masking, Cache Hit on institutional questions, and Cache Bypass on order queries.
+- [x] Implement `src/security/rate_limiter.py` (in-memory Sliding Window per `session_id` + maximum character payload limit).
+- [x] Implement `src/security/guardrails.py` blocking SQL Injection patterns, Jailbreak attempts, System Prompt extraction, and out-of-scope topics while preserving the musical specialist persona.
+- [x] Implement `src/security/pii_anonymizer.py` (compatible with Microsoft Presidio + regex recognizers for Brazilian CPF, email, and phone numbers) to sanitize logs and telemetry without breaking in-memory DuckDB lookups.
+- [x] Implement `src/cache/semantic_cache.py` in memory (cosine similarity threshold >= 0.92) with a **strict Transactional/PII Bypass Rule**: never cache queries or responses containing CPF, order IDs, personal data, or live order/stock lookups.
+- [x] Create unit tests in `tests/test_security_and_cache.py` verifying jailbreak blocking, CPF masking, Cache Hit on institutional questions, and Cache Bypass on order queries.
 - **Validation:** `pytest tests/test_security_and_cache.py -v`
 - **Commit:** `feat(security): add input guardrails, rate limiter, context-aware semantic cache and PII masking`
 
