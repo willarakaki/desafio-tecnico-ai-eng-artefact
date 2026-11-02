@@ -19,6 +19,16 @@ from src.tools.catalog_tools import (
 from src.tools.catalog_tools import (
     GetActivePromotionsInput as GetPromotionsSchema,
 )
+from src.tools.hitl_tools import (
+    EscalateToHumanInput,
+    HandoffTicket,
+    HandoffTicketRegistry,
+    HITLEscalationResult,
+    create_hitl_tools,
+    escalate_to_human,
+    get_ticket_registry,
+    reset_ticket_registry,
+)
 from src.tools.order_tools import (
     GetOrderStatusInput,
     OrderDetail,
@@ -39,10 +49,14 @@ __all__: list[str] = [
     "ActivePromotionsResult",
     "CatalogSearchResult",
     "ConsultStorePoliciesInput",
+    "EscalateToHumanInput",
     "GetActivePromotionsInput",
     "GetOrderStatusInput",
     "GetProductDetailsInput",
     "GetPromotionsSchema",
+    "HITLEscalationResult",
+    "HandoffTicket",
+    "HandoffTicketRegistry",
     "OrderDetail",
     "OrderItemDetail",
     "OrderStatusResult",
@@ -56,10 +70,14 @@ __all__: list[str] = [
     "StorePoliciesResult",
     "consult_store_policies",
     "create_catalog_tools",
+    "create_hitl_tools",
     "create_order_tools",
     "create_policy_tools",
+    "escalate_to_human",
     "get_active_promotions",
     "get_order_status",
     "get_product_details",
+    "get_ticket_registry",
+    "reset_ticket_registry",
     "search_products",
 ]

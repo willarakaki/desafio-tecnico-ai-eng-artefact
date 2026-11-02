@@ -1,6 +1,9 @@
 """Empório da Música Intelligent Assistant package."""
 
+from src.agent.graph import AgentTurnResult, EmporioAgent, build_emporio_graph, get_default_tools
 from src.agent.llm_factory import LLMFactory
+from src.agent.prompts import SYSTEM_PROMPT, get_system_prompt
+from src.agent.state import AgentState
 from src.cache.semantic_cache import (
     CacheLookupResult,
     CacheStats,
@@ -11,6 +14,16 @@ from src.cache.semantic_cache import (
 )
 from src.config import Settings, get_settings
 from src.database.duckdb_manager import DuckDBManager, get_duckdb_manager, reset_duckdb_manager
+from src.observability.telemetry import (
+    MODEL_PRICING_PER_1M,
+    CacheStatusType,
+    GuardrailStatusType,
+    TelemetryManager,
+    TurnTelemetry,
+    calculate_token_cost,
+    get_telemetry_manager,
+    reset_telemetry_manager,
+)
 from src.rag.hybrid_retriever import (
     HybridRetriever,
     get_hybrid_retriever,
@@ -49,6 +62,16 @@ from src.tools.catalog_tools import (
     get_product_details,
     search_products,
 )
+from src.tools.hitl_tools import (
+    EscalateToHumanInput,
+    HandoffTicket,
+    HandoffTicketRegistry,
+    HITLEscalationResult,
+    create_hitl_tools,
+    escalate_to_human,
+    get_ticket_registry,
+    reset_ticket_registry,
+)
 from src.tools.order_tools import (
     OrderDetail,
     OrderItemDetail,
@@ -65,15 +88,26 @@ from src.tools.policy_tools import (
 )
 
 __all__: list[str] = [
+    "MODEL_PRICING_PER_1M",
+    "SYSTEM_PROMPT",
     "ActivePromotionsResult",
+    "AgentState",
+    "AgentTurnResult",
     "CacheLookupResult",
     "CacheStats",
     "CacheStatus",
+    "CacheStatusType",
     "CatalogSearchResult",
     "ConsultStorePoliciesInput",
     "DuckDBManager",
+    "EmporioAgent",
+    "EscalateToHumanInput",
     "GuardrailCategory",
     "GuardrailResult",
+    "GuardrailStatusType",
+    "HITLEscalationResult",
+    "HandoffTicket",
+    "HandoffTicketRegistry",
     "HybridRetriever",
     "InputGuardrail",
     "LLMFactory",
@@ -94,11 +128,18 @@ __all__: list[str] = [
     "Settings",
     "SlidingWindowRateLimiter",
     "StorePoliciesResult",
+    "TelemetryManager",
+    "TurnTelemetry",
+    "build_emporio_graph",
+    "calculate_token_cost",
     "consult_store_policies",
     "create_catalog_tools",
+    "create_hitl_tools",
     "create_order_tools",
     "create_policy_tools",
+    "escalate_to_human",
     "get_active_promotions",
+    "get_default_tools",
     "get_duckdb_manager",
     "get_hybrid_retriever",
     "get_input_guardrail",
@@ -108,6 +149,9 @@ __all__: list[str] = [
     "get_rate_limiter",
     "get_semantic_cache",
     "get_settings",
+    "get_system_prompt",
+    "get_telemetry_manager",
+    "get_ticket_registry",
     "load_store_policy_documents",
     "reset_duckdb_manager",
     "reset_hybrid_retriever",
@@ -115,5 +159,7 @@ __all__: list[str] = [
     "reset_pii_anonymizer",
     "reset_rate_limiter",
     "reset_semantic_cache",
+    "reset_telemetry_manager",
+    "reset_ticket_registry",
     "search_products",
 ]

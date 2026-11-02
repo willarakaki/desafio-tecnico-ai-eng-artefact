@@ -55,13 +55,13 @@
 - **Validation:** `pytest tests/test_security_and_cache.py -v`
 - **Commit:** `feat(security): add input guardrails, rate limiter, context-aware semantic cache and PII masking`
 
-## [ ] Task 5: LangGraph Orchestrator, Persona, HITL & FinOps Telemetry
+## [x] Task 5: LangGraph Orchestrator, Persona, HITL & FinOps Telemetry
 **Objective:** Build the stateful agent graph integrating all tools, human escalation, and observability metrics.
-- [ ] Implement `escalate_to_human(reason, case_summary, urgency_level)` in `src/tools/hitl_tools.py` for policy exceptions, complex warranty claims, or dissatisfied customers.
-- [ ] Implement `src/observability/telemetry.py` tracking total latency (ms), Semantic Cache status (`HIT`, `MISS`, `BYPASS_TRANSACTIONAL`), invoked tools, token usage, and estimated cost in USD.
-- [ ] Implement `src/agent/prompts.py` defining the Empório da Música specialist System Prompt and explicit negative constraints against hallucination.
-- [ ] Implement `src/agent/state.py` and `src/agent/graph.py` using LangGraph with `MemorySaver` (`thread_id`) and `recursion_limit=6`.
-- [ ] Create integration tests in `tests/test_agent_routing.py` validating routing across CSV tools, PDF RAG, combined CSV+PDF reasoning, HITL escalation, and out-of-scope refusal.
+- [x] Implement `escalate_to_human(reason, case_summary, urgency_level)` in `src/tools/hitl_tools.py` for policy exceptions, complex warranty claims, or dissatisfied customers.
+- [x] Implement `src/observability/telemetry.py` tracking total latency (ms), Semantic Cache status (`HIT`, `MISS`, `BYPASS_TRANSACTIONAL`), invoked tools, token usage, and estimated cost in USD.
+- [x] Implement `src/agent/prompts.py` defining the Empório da Música specialist System Prompt and explicit negative constraints against hallucination.
+- [x] Implement `src/agent/state.py` and `src/agent/graph.py` using LangGraph with `MemorySaver` (`thread_id`) and `recursion_limit=6`.
+- [x] Create integration tests in `tests/test_agent_routing.py` validating routing across CSV tools, PDF RAG, combined CSV+PDF reasoning, HITL escalation, and out-of-scope refusal.
 - **Validation:** `pytest tests/test_agent_routing.py -v`
 - **Commit:** `feat(agent): implement LangGraph orchestrator, HITL handoff and FinOps telemetry`
 
@@ -74,16 +74,19 @@
 - **Validation:** Smoke test both interfaces and verify clean imports.
 - **Commit:** `feat(ui): add interactive Rich CLI and Streamlit interface with FinOps telemetry panel`
 
-## [ ] Task 7: Automated Generation of 5 Conversation Scenarios (`transcripts/`)
-**Objective:** Generate the mandatory interaction deliverables using the real agent pipeline.
+## [ ] Task 7: Model Resiliency (Fallback Model) & Automated Generation of 5 Conversation Scenarios (`transcripts/`)
+**Objective:** Enhance agent robustness with automatic provider failover (Fallback Model) and generate the mandatory interaction deliverables using the real agent pipeline.
+- [ ] Implement Fallback Model support in `src/agent/llm_factory.py` (via LangChain's `.with_fallbacks()` across primary and secondary LLM providers, e.g. Gemini -> OpenAI/Ollama) with graceful degradation to HITL if all providers fail.
+- [ ] Update `src/observability/telemetry.py` and `src/agent/graph.py` to record `fallback_used: bool` and the actual provider resolving the inference turn.
+- [ ] Add tests in `tests/test_llm_factory.py` and `tests/test_agent_routing.py` verifying fallback model activation on simulated API failures/rate limits (HTTP 429/500/timeout).
 - [ ] Create `scripts/generate_transcripts.py` to execute 5 realistic multi-turn conversations against the agent and export formatted Markdown files (including tool call traces and FinOps telemetry):
   1. `transcripts/01_catalogo_violoes_ate_1000.md` (Filtered catalog search + instrument specification advice).
   2. `transcripts/02_preco_especifico_takamine_gd20.md` (Exact price lookup, stock availability, and payment rules).
   3. `transcripts/03_informacoes_gerais_e_endereco.md` (Store address in Campo Grande/MS, opening hours, and demonstration of a Semantic Cache `HIT`).
   4. `transcripts/04_politica_devolucao_pedido_e_hitl.md` (Non-trivial multi-source scenario: order status lookup in CSV + return policy lookup in PDF + exception request triggering HITL escalation).
   5. `transcripts/05_guardrails_fora_de_escopo_e_jailbreak.md` (Polite refusal of out-of-domain questions and active blocking of a Prompt Injection attempt).
-- **Validation:** Confirm all 5 files exist in `transcripts/` and strictly reflect the real data from `data/`.
-- **Commit:** `docs(transcripts): generate 5 real multi-turn conversation scenarios with telemetry`
+- **Validation:** Confirm fallback resilience tests pass and all 5 files exist in `transcripts/` strictly reflecting real data from `data/`.
+- **Commit:** `feat(resilience): implement fallback model mechanism and generate 5 conversation scenarios with telemetry`
 
 ## [ ] Task 8: Executive & Technical `README.md`
 **Objective:** Consolidate all architectural justifications and operational instructions required by Artefact.
