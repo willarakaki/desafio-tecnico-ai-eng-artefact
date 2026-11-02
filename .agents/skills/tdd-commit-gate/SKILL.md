@@ -19,7 +19,7 @@ Follow this sequential lifecycle for every task in `TASKS.md`:
    - `Task 4` -> `git checkout -b feat/task-4-security-and-cache`
    - `Task 5` -> `git checkout -b feat/task-5-langgraph-orchestrator`
    - `Task 6` -> `git checkout -b feat/task-6-cli-and-streamlit-ui`
-   - `Task 7` -> `git checkout -b docs/task-7-conversation-transcripts`
+   - `Task 7` -> `git checkout -b feat/task-7-fallback-and-transcripts`
    - `Task 8` -> `git checkout -b docs/task-8-executive-readme`
 
 ## Phase B: Architecture, Security & Ruff Audit (Before Commit)
