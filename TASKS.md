@@ -23,16 +23,16 @@
 - **Validation:** `pytest tests/test_llm_factory.py -v`
 - **Commit:** `feat(core): implement centralized config and multi-provider LLMFactory`
 
-## [ ] Task 2: DuckDB Ingestion & Deterministic CSV Tools
+## [x] Task 2: DuckDB Ingestion & Deterministic CSV Tools
 **Objective:** Load operational CSV files into an in-memory relational database and expose strictly typed tools.
-- [ ] Implement `src/database/duckdb_manager.py` to automatically ingest `data/*.csv` into DuckDB tables with text normalization (accent stripping and whitespace trimming).
-- [ ] Implement `src/tools/catalog_tools.py` with strict Pydantic v2 schemas:
+- [x] Implement `src/database/duckdb_manager.py` to automatically ingest `data/*.csv` into DuckDB tables with text normalization (accent stripping and whitespace trimming).
+- [x] Implement `src/tools/catalog_tools.py` with strict Pydantic v2 schemas:
   - `search_products(query, category, max_price, in_stock_only)`
   - `get_product_details(product_name_or_id)`
   - `get_active_promotions(category_or_product)`
-- [ ] Implement `src/tools/order_tools.py` with strict Pydantic v2 schemas:
+- [x] Implement `src/tools/order_tools.py` with strict Pydantic v2 schemas:
   - `get_order_status(order_id, customer_identifier)`
-- [ ] Create deterministic unit tests in `tests/test_duckdb_tools.py` covering real queries (e.g., acoustic guitars/violões up to R$ 1000, Takamine GD20 lookup, non-existent item handling, and order status lookup).
+- [x] Create deterministic unit tests in `tests/test_duckdb_tools.py` covering real queries (e.g., acoustic guitars/violões up to R$ 1000, Takamine GD20 lookup, non-existent item handling, and order status lookup).
 - **Validation:** `pytest tests/test_duckdb_tools.py -v`
 - **Commit:** `feat(data): implement DuckDB ingestion and deterministic catalog and order tools`
 
