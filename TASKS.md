@@ -36,12 +36,12 @@
 - **Validation:** `pytest tests/test_duckdb_tools.py -v`
 - **Commit:** `feat(data): implement DuckDB ingestion and deterministic catalog and order tools`
 
-## [ ] Task 3: Hybrid RAG Pipeline for Store Policies PDF
+## [x] Task 3: Hybrid RAG Pipeline for Store Policies PDF
 **Objective:** Implement hybrid retrieval (lexical + dense semantic search) over `data/políticas_da_loja.pdf`.
-- [ ] Implement `src/rag/pdf_loader.py` for clean PDF text extraction and semantic/topic-based chunking (exchanges, returns, warranty, opening hours, store address, payment methods).
-- [ ] Implement `src/rag/hybrid_retriever.py` combining `BM25Retriever` (weight 0.4 for exact lexical matches like deadlines and address) and `FAISS` (weight 0.6 for semantic similarity).
-- [ ] Implement the `consult_store_policies(question)` tool in `src/tools/policy_tools.py` returning relevant chunks with page/section metadata.
-- [ ] Create unit tests in `tests/test_rag_policies.py` validating retrieval accuracy for the Campo Grande/MS store address, opening hours, and return/refund rules.
+- [x] Implement `src/rag/pdf_loader.py` for clean PDF text extraction and semantic/topic-based chunking (exchanges, returns, warranty, opening hours, store address, payment methods).
+- [x] Implement `src/rag/hybrid_retriever.py` combining `BM25Retriever` (weight 0.4 for exact lexical matches like deadlines and address) and `FAISS` (weight 0.6 for semantic similarity).
+- [x] Implement the `consult_store_policies(question)` tool in `src/tools/policy_tools.py` returning relevant chunks with page/section metadata.
+- [x] Create unit tests in `tests/test_rag_policies.py` validating retrieval accuracy for the Campo Grande/MS store address, opening hours, and return/refund rules.
 - **Validation:** `pytest tests/test_rag_policies.py -v`
 - **Commit:** `feat(rag): build hybrid retriever (BM25 + FAISS) for store policies PDF`
 
