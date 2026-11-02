@@ -55,13 +55,13 @@
 - **Validation:** `pytest tests/test_security_and_cache.py -v`
 - **Commit:** `feat(security): add input guardrails, rate limiter, context-aware semantic cache and PII masking`
 
-## [ ] Task 5: LangGraph Orchestrator, Persona, HITL & FinOps Telemetry
+## [x] Task 5: LangGraph Orchestrator, Persona, HITL & FinOps Telemetry
 **Objective:** Build the stateful agent graph integrating all tools, human escalation, and observability metrics.
-- [ ] Implement `escalate_to_human(reason, case_summary, urgency_level)` in `src/tools/hitl_tools.py` for policy exceptions, complex warranty claims, or dissatisfied customers.
-- [ ] Implement `src/observability/telemetry.py` tracking total latency (ms), Semantic Cache status (`HIT`, `MISS`, `BYPASS_TRANSACTIONAL`), invoked tools, token usage, and estimated cost in USD.
-- [ ] Implement `src/agent/prompts.py` defining the Empório da Música specialist System Prompt and explicit negative constraints against hallucination.
-- [ ] Implement `src/agent/state.py` and `src/agent/graph.py` using LangGraph with `MemorySaver` (`thread_id`) and `recursion_limit=6`.
-- [ ] Create integration tests in `tests/test_agent_routing.py` validating routing across CSV tools, PDF RAG, combined CSV+PDF reasoning, HITL escalation, and out-of-scope refusal.
+- [x] Implement `escalate_to_human(reason, case_summary, urgency_level)` in `src/tools/hitl_tools.py` for policy exceptions, complex warranty claims, or dissatisfied customers.
+- [x] Implement `src/observability/telemetry.py` tracking total latency (ms), Semantic Cache status (`HIT`, `MISS`, `BYPASS_TRANSACTIONAL`), invoked tools, token usage, and estimated cost in USD.
+- [x] Implement `src/agent/prompts.py` defining the Empório da Música specialist System Prompt and explicit negative constraints against hallucination.
+- [x] Implement `src/agent/state.py` and `src/agent/graph.py` using LangGraph with `MemorySaver` (`thread_id`) and `recursion_limit=6`.
+- [x] Create integration tests in `tests/test_agent_routing.py` validating routing across CSV tools, PDF RAG, combined CSV+PDF reasoning, HITL escalation, and out-of-scope refusal.
 - **Validation:** `pytest tests/test_agent_routing.py -v`
 - **Commit:** `feat(agent): implement LangGraph orchestrator, HITL handoff and FinOps telemetry`
 
