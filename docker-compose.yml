@@ -1,0 +1,20 @@
+services:
+  emporio-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: emporio-da-musica-agent
+    ports:
+      - "8501:8501"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - DATA_DIR=data
+    volumes:
+      - ./data:/app/data:ro
+    restart: unless-stopped

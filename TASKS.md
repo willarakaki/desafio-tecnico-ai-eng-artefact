@@ -2,13 +2,13 @@
 
 > **Agent Instruction (Antigravity):** Execute **only one task at a time**. Upon finishing the implementation of a task, invoke the `tdd-commit-gate` skill and run the corresponding test suite with `pytest -v`. Only after 100% of tests pass, request approval to execute the specified semantic commit before moving to the next task.
 
-## [ ] Task 0: Data Profiling, Project Setup, Ruff, CI/CD & Base Dockerization
+## [x] Task 0: Data Profiling, Project Setup, Ruff, CI/CD & Base Dockerization
 **Objective:** Inspect the actual datasets provided for the challenge and scaffold the Python project foundation with linting, CI, and containerization.
-- [ ] Inspect all files in `data/*.csv` (list exact filenames, column names, data types, and first 5 rows) and extract the topic structure from `data/políticas_da_loja.pdf`.
-- [ ] Update `docs/architecture.md` with section "2.1. Mapped Data Dictionary" containing the discovered real schema.
-- [ ] Create `pyproject.toml` (compatible with `uv` and `pip`, including `ruff` and `pytest` configurations), `.python-version` (3.11), `.env.example`, and `.gitignore`.
-- [ ] Create `.github/workflows/ci.yml` to automatically run `ruff check .` and `pytest -v` on every push and merge to `main`.
-- [ ] Create a lightweight `Dockerfile` (`python:3.11-slim` with `uv`) and `docker-compose.yml` exposing the Streamlit UI (`8501`) and passing `.env` variables for zero-friction evaluation.
+- [x] Inspect all files in `data/*.csv` (list exact filenames, column names, data types, and first 5 rows) and extract the topic structure from `data/políticas_da_loja.pdf`.
+- [x] Update `docs/architecture.md` with section "2.1. Mapped Data Dictionary" containing the discovered real schema.
+- [x] Create `pyproject.toml` (compatible with `uv` and `pip`, including `ruff` and `pytest` configurations), `.python-version` (3.11), `.env.example`, and `.gitignore`.
+- [x] Create `.github/workflows/ci.yml` to automatically run `ruff check .` and `pytest -v` on every push and merge to `main`.
+- [x] Create a lightweight `Dockerfile` (`python:3.11-slim` with `uv`) and `docker-compose.yml` exposing the Streamlit UI (`8501`) and passing `.env` variables for zero-friction evaluation.
 - **Validation:** Virtual environment created, dependencies installed, and `uv run ruff check .` passes with zero errors.
 - **Commit:** `chore(setup): initialize project structure, ruff, github actions ci, docker config and data profiling`
 

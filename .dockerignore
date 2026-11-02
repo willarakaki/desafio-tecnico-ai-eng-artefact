@@ -1,0 +1,27 @@
+# Git & local agent metadata
+.git
+.gitignore
+.github
+.agents
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments & caches
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# IDE & OS metadata
+.vscode
+.idea
+.DS_Store
+Thumbs.db
