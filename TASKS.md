@@ -12,14 +12,14 @@
 - **Validation:** Virtual environment created, dependencies installed, and `uv run ruff check .` passes with zero errors.
 - **Commit:** `chore(setup): initialize project structure, ruff, github actions ci, docker config and data profiling`
 
-## [ ] Task 1: Core Configuration & `LLMFactory` Pattern
+## [x] Task 1: Core Configuration & `LLMFactory` Pattern
 **Objective:** Decouple LLM providers and centralize environment settings.
-- [ ] Implement `src/config.py` using `pydantic-settings` (supporting `LLM_PROVIDER`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL`, rate limit thresholds, and semantic cache similarity thresholds).
-- [ ] Implement `src/agent/llm_factory.py` with the `LLMFactory` class providing:
+- [x] Implement `src/config.py` using `pydantic-settings` (supporting `LLM_PROVIDER`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL`, rate limit thresholds, and semantic cache similarity thresholds).
+- [x] Implement `src/agent/llm_factory.py` with the `LLMFactory` class providing:
   - `get_router_llm(temperature=0.0)`: Fast, deterministic model for intent classification, guardrails, and tool routing.
   - `get_synthesizer_llm(temperature=0.2)`: Consultative model for final customer responses aligned with the store persona.
   - `get_embeddings()`: Embedding model instance matching the active provider.
-- [ ] Create unit tests in `tests/test_llm_factory.py` validating provider instantiation and configuration switching.
+- [x] Create unit tests in `tests/test_llm_factory.py` validating provider instantiation and configuration switching.
 - **Validation:** `pytest tests/test_llm_factory.py -v`
 - **Commit:** `feat(core): implement centralized config and multi-provider LLMFactory`
 
