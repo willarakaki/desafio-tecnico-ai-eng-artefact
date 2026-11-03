@@ -16,7 +16,8 @@ GuardrailStatusType = Literal["passed", "blocked", "rate_limited"]
 
 # Pricing in USD per 1,000,000 tokens
 MODEL_PRICING_PER_1M: dict[str, dict[str, float]] = {
-    # Gemini 2.5 Flash / Gemini 2.0 Flash
+    # Gemini 3.5 Flash-Lite / 2.5 Flash / 2.0 Flash
+    "gemini-3.5-flash-lite": {"input": 0.075, "output": 0.30},
     "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
     "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},

@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,11 +31,11 @@ class Settings(BaseSettings):
         description="API key for Google Gemini provider",
     )
     gemini_router_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.5-flash-lite",
         description="Model identifier for deterministic routing and guardrails",
     )
     gemini_synthesizer_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.5-flash-lite",
         description="Model identifier for customer response synthesis",
     )
     gemini_embedding_model: str = Field(
@@ -105,6 +105,24 @@ class Settings(BaseSettings):
         description="Maximum allowed character length for incoming user messages",
     )
 
+    # LangSmith Tracing Settings
+    langchain_tracing_v2: bool = Field(
+        default=False,
+        description="Enable LangSmith distributed tracing",
+    )
+    langchain_api_key: str | None = Field(
+        default=None,
+        description="API key for LangSmith tracing",
+    )
+    langchain_project: str = Field(
+        default="emporio-da-musica-agent",
+        description="Project name in LangSmith dashboard",
+    )
+    langchain_endpoint: str = Field(
+        default="https://api.smith.langchain.com",
+        description="LangSmith API endpoint",
+    )
+
     # Observability & Paths
     data_dir: Path = Field(
         default=Path("data"),
@@ -114,6 +132,21 @@ class Settings(BaseSettings):
         default="INFO",
         description="Application logging verbosity level",
     )
+
+    @model_validator(mode="after")
+    def setup_langsmith_tracing(self) -> Settings:
+        """Propagate LangSmith environment variables if tracing is enabled or API key is set."""
+        import os
+
+        if self.langchain_api_key or self.langchain_tracing_v2:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            if self.langchain_api_key:
+                os.environ["LANGCHAIN_API_KEY"] = self.langchain_api_key
+            if self.langchain_project:
+                os.environ["LANGCHAIN_PROJECT"] = self.langchain_project
+            if self.langchain_endpoint:
+                os.environ["LANGCHAIN_ENDPOINT"] = self.langchain_endpoint
+        return self
 
     @field_validator("semantic_cache_threshold")
     @classmethod

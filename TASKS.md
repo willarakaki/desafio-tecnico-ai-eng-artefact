@@ -88,14 +88,28 @@
 - **Validation:** Confirm fallback resilience tests pass and all 5 files exist in `transcripts/` strictly reflecting real data from `data/`.
 - **Commit:** `feat(resilience): implement fallback model mechanism and generate 5 conversation scenarios with telemetry`
 
-## [ ] Task 8: Executive & Technical `README.md`
+## [ ] Task 8: Enterprise Backend — FastAPI REST & SSE Streaming API + Dockerization
+**Objective:** Deliver an enterprise-grade API tier aligning with production JD expectations (FastAPI backend wrapping LangGraph, Server-Sent Events streaming compatible with modern React/Next.js Vercel AI SDK, and 1-command Docker containerization).
+- [ ] Implement `src/api/server.py` with FastAPI:
+  - `POST /api/chat`: synchronous turn execution returning structured JSON with response, FinOps telemetry, tools called, and HITL tickets.
+  - `POST /api/chat/stream`: Server-Sent Events (SSE) streaming endpoint returning chunked tokens and graph step events.
+  - `GET /api/health`: production readiness/liveness probe checking DuckDB, Hybrid RAG, and LLM configuration.
+  - `GET /api/metrics`: session-aggregated FinOps and telemetry metrics.
+  - Interactive OpenAPI Swagger documentation (`/docs` and `/redoc`).
+- [ ] Create `Dockerfile` (optimized multi-stage or Python 3.11-slim) and `docker-compose.yml` supporting both FastAPI and Streamlit services.
+- [ ] Add unit and integration tests in `tests/test_api.py` validating all endpoints, status codes, and streaming responses using FastAPI `TestClient`.
+- **Validation:** Confirm 100% of test suite passes and Docker image builds successfully.
+- **Commit:** `feat(api): implement enterprise FastAPI REST and SSE streaming server with Docker containerization`
+
+## [ ] Task 9: Executive & Technical `README.md`
 **Objective:** Consolidate all architectural justifications and operational instructions required by Artefact.
 - [ ] Write a comprehensive `README.md` in Portuguese (matching the challenge language) covering:
   - Executive summary, architecture topology, and Mermaid diagram.
-  - Step-by-step setup and execution guide (`uv`/`pip` and `Docker`).
-  - Technical justifications (`LLMFactory`, DuckDB vs. Text-to-SQL, Hybrid RAG BM25+FAISS, Context-Aware Semantic Cache, Guardrails, Presidio PII Masking, and HITL).
-  - FinOps cost breakdown and latency metrics.
+  - Quickstart in 3 local commands (`uv`/`pip` with Streamlit or CLI) and 1 command via Docker (`docker compose up`).
+  - OpenAPI Swagger documentation overview and React/Next.js Vercel AI SDK frontend integration example snippet.
+  - Technical justifications (`LLMFactory`, DuckDB vs. Text-to-SQL, Hybrid RAG BM25+FAISS, Context-Aware Semantic Cache, Guardrails, Presidio PII Masking, HITL, and Resilient Fallbacks).
+  - FinOps cost breakdown, latency metrics, and LangSmith observability guide.
   - AI Coding Assistant Workflow disclosure (Spec-Driven Development + TDD with custom skills in Google Antigravity).
-  - Known limitations and production roadmap (MCP servers, distributed Redis cache, dedicated Llama Prompt Guard 2 via vLLM, CI/CD evaluation with Ragas/DeepEval, and FastAPI SSE streaming).
+  - Production roadmap (MCP servers, distributed Redis cache, dedicated Llama Prompt Guard 2 via vLLM, CI/CD evaluation with Ragas/DeepEval).
 - **Validation:** Run full `pytest -v` suite to confirm 100% pass rate before final submission.
 - **Commit:** `docs(readme): complete technical documentation, FinOps analysis and AI workflow disclosure`

@@ -22,8 +22,8 @@ def test_default_settings_initialization() -> None:
         _env_file=None,  # Do not read .env to test pristine defaults
     )
     assert settings.llm_provider == "gemini"
-    assert settings.gemini_router_model == "gemini-2.5-flash"
-    assert settings.gemini_synthesizer_model == "gemini-2.5-flash"
+    assert settings.gemini_router_model == "gemini-3.5-flash-lite"
+    assert settings.gemini_synthesizer_model == "gemini-3.5-flash-lite"
     assert settings.gemini_embedding_model == "models/gemini-embedding-001"
     assert settings.openai_router_model == "gpt-4o-mini"
     assert settings.openai_synthesizer_model == "gpt-4o-mini"
@@ -75,12 +75,12 @@ def test_gemini_provider_instantiation() -> None:
 
     router_llm = factory.get_router_llm()
     assert isinstance(router_llm, ChatGoogleGenerativeAI)
-    assert router_llm.model in ("gemini-2.5-flash", "models/gemini-2.5-flash")
+    assert router_llm.model in ("gemini-3.5-flash-lite", "models/gemini-3.5-flash-lite")
     assert router_llm.temperature == 0.0
 
     synth_llm = factory.get_synthesizer_llm()
     assert isinstance(synth_llm, ChatGoogleGenerativeAI)
-    assert synth_llm.model in ("gemini-2.5-flash", "models/gemini-2.5-flash")
+    assert synth_llm.model in ("gemini-3.5-flash-lite", "models/gemini-3.5-flash-lite")
     assert synth_llm.temperature == 0.2
 
     embeddings = factory.get_embeddings()

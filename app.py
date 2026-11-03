@@ -146,10 +146,30 @@ def render_sidebar(
         # Section 4: Session Controls
         if st.button("🧹 Nova Conversa / Limpar Sessão", use_container_width=True):
             st.session_state["session_id"] = f"web-{uuid.uuid4().hex[:8]}"
-            st.session_state["messages"] = []
+            st.session_state["messages"] = [
+                {
+                    "role": "assistant",
+                    "content": (
+                        "Olá! Seja muito bem-vindo(a) à **Empório da Música**! 🎶\n\n"
+                        "Sou seu consultor virtual especialista em instrumentos musicais direto da "
+                        "nossa loja física em **Campo Grande/MS** (Rua 14 de Maio, 3200 — Centro).\n\n"
+                        "Como posso te ajudar hoje? Posso consultar nosso catálogo em tempo real, "
+                        "verificar o estoque de violões e instrumentos, conferir promoções ativas, "
+                        "rastrear seu pedido ou esclarecer dúvidas sobre nossas políticas!"
+                    ),
+                    "ticket": None,
+                }
+            ]
             st.session_state["hitl_tickets"] = []
             st.session_state["last_telemetry"] = None
             st.rerun()
+
+        import os
+
+        if os.environ.get("LANGCHAIN_TRACING_V2") == "true" and os.environ.get("LANGCHAIN_API_KEY"):
+            st.caption(f"🔭 *LangSmith Tracing: Ativo ({settings.langchain_project})*")
+        else:
+            st.caption("🔭 *LangSmith Tracing: Inativo (opcional via LANGCHAIN_API_KEY)*")
 
 
 def render_chat_history(messages: list[dict[str, Any]]) -> None:
@@ -280,6 +300,14 @@ def main() -> None:
                 query=final_query,
                 session_id=st.session_state["session_id"],
             )
+
+            if turn_result.resolved_provider == "all_failed_hitl":
+                st.error(
+                    "⚠️ **Indisponibilidade de Provedores de IA (HTTP 429 / 503):**\n\n"
+                    "O modelo atingiu a cota máxima de requisições do provedor (HTTP 429) ou enfrentou "
+                    "instabilidade no servidor (HTTP 503). O atendimento foi transferido automaticamente "
+                    "para contingência com nossa equipe humana."
+                )
 
             st.markdown(turn_result.output_text)
 
