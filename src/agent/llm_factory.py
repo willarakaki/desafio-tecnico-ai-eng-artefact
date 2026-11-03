@@ -19,6 +19,73 @@ from src.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 
+def _apply_gemini_thought_signature_patch() -> None:
+    """Monkeypatch langchain_google_genai to preserve thought_signature across tool calling turns.
+
+    Gemini 3.x models require cryptographic thought_signature bytes on functionCall parts
+    when returning tool execution outputs. langchain-google-genai v2.1.x omits this signature,
+    causing Google API 400 InvalidArgument errors unless preserved and restored.
+    """
+    try:
+        import langchain_google_genai.chat_models as _gm
+
+        if getattr(_gm, "_thought_signature_patched", False):
+            return
+
+        _orig_parse_cand = _gm._parse_response_candidate
+
+        def _patched_parse_response_candidate(cand: Any, streaming: bool = False) -> Any:
+            msg = _orig_parse_cand(cand, streaming=streaming)
+            try:
+                sigs = [
+                    getattr(p, "thought_signature", None)
+                    for p in getattr(cand.content, "parts", [])
+                    if getattr(p, "thought_signature", None)
+                ]
+                if sigs:
+                    msg.additional_kwargs["thought_signatures"] = sigs
+                    msg.additional_kwargs["thought_signature"] = sigs[0]
+            except Exception:
+                pass
+            return msg
+
+        _orig_parse_hist = _gm._parse_chat_history
+
+        def _patched_parse_chat_history(
+            input_messages: Any,
+            convert_system_message_to_human: bool = False,
+        ) -> Any:
+            sys_inst, contents = _orig_parse_hist(input_messages, convert_system_message_to_human)
+            for msg in input_messages:
+                if isinstance(msg, AIMessage):
+                    sigs = msg.additional_kwargs.get("thought_signatures") or []
+                    single_sig = msg.additional_kwargs.get("thought_signature")
+                    if sigs or single_sig:
+                        for c in contents:
+                            if getattr(c, "role", None) == "model":
+                                sig_idx = 0
+                                for p in getattr(c, "parts", []):
+                                    if getattr(p, "function_call", None) and not getattr(
+                                        p, "thought_signature", None
+                                    ):
+                                        chosen_sig = (
+                                            sigs[sig_idx] if sig_idx < len(sigs) else single_sig
+                                        )
+                                        if chosen_sig:
+                                            p.thought_signature = chosen_sig
+                                        sig_idx += 1
+            return sys_inst, contents
+
+        _gm._parse_response_candidate = _patched_parse_response_candidate
+        _gm._parse_chat_history = _patched_parse_chat_history
+        _gm._thought_signature_patched = True
+    except Exception as exc:
+        logger.debug("Failed to apply Gemini thought_signature patch: %s", exc)
+
+
+_apply_gemini_thought_signature_patch()
+
+
 def extract_model_identifiers(model: Any, default_provider: str = "gemini") -> tuple[str, str]:
     """Extract (provider, model_name) from a LangChain BaseChatModel, Runnable, or mock."""
     name = (

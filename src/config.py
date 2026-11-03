@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -108,18 +108,44 @@ class Settings(BaseSettings):
     # LangSmith Tracing Settings
     langchain_tracing_v2: bool = Field(
         default=False,
+        validation_alias=AliasChoices(
+            "LANGCHAIN_TRACING_V2",
+            "langchain_tracing_v2",
+            "LANGCHAIN_TRACING",
+            "langchain_tracing",
+            "LANGSMITH_TRACING",
+            "langsmith_tracing",
+        ),
         description="Enable LangSmith distributed tracing",
     )
     langchain_api_key: str | None = Field(
         default=None,
+        validation_alias=AliasChoices(
+            "LANGCHAIN_API_KEY",
+            "langchain_api_key",
+            "LANGSMITH_API_KEY",
+            "langsmith_api_key",
+        ),
         description="API key for LangSmith tracing",
     )
     langchain_project: str = Field(
         default="emporio-da-musica-agent",
+        validation_alias=AliasChoices(
+            "LANGCHAIN_PROJECT",
+            "langchain_project",
+            "LANGSMITH_PROJECT",
+            "langsmith_project",
+        ),
         description="Project name in LangSmith dashboard",
     )
     langchain_endpoint: str = Field(
         default="https://api.smith.langchain.com",
+        validation_alias=AliasChoices(
+            "LANGCHAIN_ENDPOINT",
+            "langchain_endpoint",
+            "LANGSMITH_ENDPOINT",
+            "langsmith_endpoint",
+        ),
         description="LangSmith API endpoint",
     )
 
@@ -140,12 +166,16 @@ class Settings(BaseSettings):
 
         if self.langchain_api_key or self.langchain_tracing_v2:
             os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_TRACING"] = "true"
             if self.langchain_api_key:
                 os.environ["LANGCHAIN_API_KEY"] = self.langchain_api_key
+                os.environ["LANGSMITH_API_KEY"] = self.langchain_api_key
             if self.langchain_project:
                 os.environ["LANGCHAIN_PROJECT"] = self.langchain_project
+                os.environ["LANGSMITH_PROJECT"] = self.langchain_project
             if self.langchain_endpoint:
                 os.environ["LANGCHAIN_ENDPOINT"] = self.langchain_endpoint
+                os.environ["LANGSMITH_ENDPOINT"] = self.langchain_endpoint
         return self
 
     @field_validator("semantic_cache_threshold")
