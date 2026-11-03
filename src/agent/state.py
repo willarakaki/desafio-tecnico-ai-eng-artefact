@@ -31,3 +31,6 @@ class AgentState(TypedDict, total=False):
     estimated_cost_usd: float
     latency_ms: float
     output_text: str | None
+    fallback_used: bool
+    resolved_provider: str | None
+    resolved_model: str | None

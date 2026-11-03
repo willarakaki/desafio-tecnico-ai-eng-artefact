@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,11 +31,11 @@ class Settings(BaseSettings):
         description="API key for Google Gemini provider",
     )
     gemini_router_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.5-flash-lite",
         description="Model identifier for deterministic routing and guardrails",
     )
     gemini_synthesizer_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.5-flash-lite",
         description="Model identifier for customer response synthesis",
     )
     gemini_embedding_model: str = Field(
@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     )
 
     # Defense-in-Depth & Semantic Cache Settings
+    enable_model_fallback: bool = Field(
+        default=True,
+        description="Enable automatic model failover across providers",
+    )
+    fallback_providers: list[str] = Field(
+        default_factory=lambda: ["openai", "ollama"],
+        description="Ordered list of secondary fallback providers",
+    )
     semantic_cache_threshold: float = Field(
         default=0.92,
         description="Cosine similarity threshold for Semantic Cache hits",
@@ -97,6 +105,50 @@ class Settings(BaseSettings):
         description="Maximum allowed character length for incoming user messages",
     )
 
+    # LangSmith Tracing Settings
+    langchain_tracing_v2: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "LANGCHAIN_TRACING_V2",
+            "langchain_tracing_v2",
+            "LANGCHAIN_TRACING",
+            "langchain_tracing",
+            "LANGSMITH_TRACING",
+            "langsmith_tracing",
+        ),
+        description="Enable LangSmith distributed tracing",
+    )
+    langchain_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "LANGCHAIN_API_KEY",
+            "langchain_api_key",
+            "LANGSMITH_API_KEY",
+            "langsmith_api_key",
+        ),
+        description="API key for LangSmith tracing",
+    )
+    langchain_project: str = Field(
+        default="emporio-da-musica-agent",
+        validation_alias=AliasChoices(
+            "LANGCHAIN_PROJECT",
+            "langchain_project",
+            "LANGSMITH_PROJECT",
+            "langsmith_project",
+        ),
+        description="Project name in LangSmith dashboard",
+    )
+    langchain_endpoint: str = Field(
+        default="https://api.smith.langchain.com",
+        validation_alias=AliasChoices(
+            "LANGCHAIN_ENDPOINT",
+            "langchain_endpoint",
+            "LANGSMITH_ENDPOINT",
+            "langsmith_endpoint",
+        ),
+        description="LangSmith API endpoint",
+    )
+
     # Observability & Paths
     data_dir: Path = Field(
         default=Path("data"),
@@ -106,6 +158,25 @@ class Settings(BaseSettings):
         default="INFO",
         description="Application logging verbosity level",
     )
+
+    @model_validator(mode="after")
+    def setup_langsmith_tracing(self) -> Settings:
+        """Propagate LangSmith environment variables if tracing is enabled or API key is set."""
+        import os
+
+        if self.langchain_api_key or self.langchain_tracing_v2:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_TRACING"] = "true"
+            if self.langchain_api_key:
+                os.environ["LANGCHAIN_API_KEY"] = self.langchain_api_key
+                os.environ["LANGSMITH_API_KEY"] = self.langchain_api_key
+            if self.langchain_project:
+                os.environ["LANGCHAIN_PROJECT"] = self.langchain_project
+                os.environ["LANGSMITH_PROJECT"] = self.langchain_project
+            if self.langchain_endpoint:
+                os.environ["LANGCHAIN_ENDPOINT"] = self.langchain_endpoint
+                os.environ["LANGSMITH_ENDPOINT"] = self.langchain_endpoint
+        return self
 
     @field_validator("semantic_cache_threshold")
     @classmethod

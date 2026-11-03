@@ -87,6 +87,8 @@ class DeterministicAgentChatModel(BaseChatModel):
 
     turn_counter: int = Field(default=0)
     canned_responses: dict[str, Any] = Field(default_factory=dict)
+    provider: str = Field(default="gemini")
+    model_name: str = Field(default="gemini-2.5-flash")
 
     @property
     def _llm_type(self) -> str:
@@ -639,3 +641,67 @@ def test_pii_anonymization_in_agent_output() -> None:
     # CPF must be masked by PIIAnonymizer in finalize_node
     assert "123.456.789-01" not in result.output_text
     assert "***.***.***-**" in result.output_text
+
+
+def test_agent_routing_fallback_model_activation() -> None:
+    """Validate that EmporioAgent automatically activates fallback model when primary fails."""
+    # Primary model simulates a rate limit / 429 error
+    failing_primary = MagicMock(spec=BaseChatModel)
+    failing_primary.invoke.side_effect = RuntimeError("429 Too Many Requests: RateLimitError")
+    failing_primary.bind_tools.return_value = failing_primary
+
+    # Fallback model is our deterministic agent simulator
+    working_fallback = DeterministicAgentChatModel(provider="openai", model_name="gpt-4o-mini")
+
+    settings = Settings(llm_provider="gemini")
+    cache = SemanticCache(embeddings=DeterministicMockEmbeddings(), settings=settings)
+
+    agent = EmporioAgent(
+        settings=settings,
+        model=failing_primary,
+        fallback_models=[working_fallback],
+        semantic_cache=cache,
+    )
+
+    result = agent.run("Gostaria de opções de violões até 1000 reais", session_id="fb_test_1")
+
+    assert result.fallback_used is True
+    assert result.telemetry.fallback_used is True
+    assert result.telemetry.provider == "openai"
+    assert result.resolved_provider == "openai"
+    assert "search_products" in result.tools_called
+    assert "violões" in result.output_text.lower() or "giannini" in result.output_text.lower()
+
+
+def test_agent_routing_all_providers_failure_hitl_degradation() -> None:
+    """Validate graceful degradation to HITL when all LLM providers fail with simulated outage."""
+    failing_primary = MagicMock(spec=BaseChatModel)
+    failing_primary.invoke.side_effect = ConnectionError("500 Gemini Down")
+    failing_primary.bind_tools.return_value = failing_primary
+
+    failing_fallback = MagicMock(spec=BaseChatModel)
+    failing_fallback.invoke.side_effect = ConnectionError("500 OpenAI Down")
+    failing_fallback.bind_tools.return_value = failing_fallback
+
+    settings = Settings(llm_provider="gemini")
+    cache = SemanticCache(embeddings=DeterministicMockEmbeddings(), settings=settings)
+
+    agent = EmporioAgent(
+        settings=settings,
+        model=failing_primary,
+        fallback_models=[failing_fallback],
+        semantic_cache=cache,
+    )
+
+    result = agent.run("Qual o status da entrega?", session_id="all_fail_test")
+
+    # Graceful degradation assertions
+    assert result.requires_human_intervention is True
+    assert result.fallback_used is True
+    assert result.escalation_ticket is not None
+    assert result.escalation_ticket["urgency_level"] == "critical"
+    assert "WhatsApp" in result.output_text
+    assert "Protocolo:" in result.output_text
+    assert "TKT-" in result.output_text
+    assert result.telemetry.requires_human_intervention is True
+    assert result.telemetry.fallback_used is True

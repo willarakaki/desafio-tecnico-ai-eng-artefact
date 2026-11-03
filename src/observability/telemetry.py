@@ -16,7 +16,8 @@ GuardrailStatusType = Literal["passed", "blocked", "rate_limited"]
 
 # Pricing in USD per 1,000,000 tokens
 MODEL_PRICING_PER_1M: dict[str, dict[str, float]] = {
-    # Gemini 2.5 Flash / Gemini 2.0 Flash
+    # Gemini 3.5 Flash-Lite / 2.5 Flash / 2.0 Flash
+    "gemini-3.5-flash-lite": {"input": 0.075, "output": 0.30},
     "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
     "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
@@ -114,6 +115,10 @@ class TurnTelemetry(BaseModel):
         default="gemini", description="LLM provider name ('gemini', 'openai', 'ollama')."
     )
     model_name: str = Field(default="gemini-2.5-flash", description="Underlying model name used.")
+    fallback_used: bool = Field(
+        default=False,
+        description="Whether a fallback model was activated to resolve this turn.",
+    )
 
     def format_summary(self) -> str:
         """Return a human-readable single-line summary of turn telemetry."""
@@ -125,6 +130,7 @@ class TurnTelemetry(BaseModel):
             f"Latency: {self.latency_ms:.1f}ms | Cache: {self.cache_status} | "
             f"Tools: [{tools_str}] | Tokens: {self.total_tokens} (In: {self.input_tokens}, "
             f"Out: {self.output_tokens}) | Cost: ${self.estimated_cost_usd:.6f}{hitl_str}"
+            + (f" [Fallback: {self.provider}/{self.model_name}]" if self.fallback_used else "")
         )
 
 
@@ -177,6 +183,7 @@ class TelemetryManager:
                 "cache_bypasses": 0,
                 "cache_hit_rate": 0.0,
                 "hitl_escalations": 0,
+                "fallback_turns": 0,
                 "tools_invoked_count": 0,
                 "tools_distribution": {},
             }
@@ -195,6 +202,7 @@ class TelemetryManager:
         cache_hit_rate = (cache_hits / total_turns) if total_turns > 0 else 0.0
 
         hitl_count = sum(1 for t in turns if t.requires_human_intervention)
+        fallback_count = sum(1 for t in turns if t.fallback_used)
 
         tools_dist: dict[str, int] = {}
         for t in turns:
@@ -214,6 +222,7 @@ class TelemetryManager:
             "cache_bypasses": cache_bypasses,
             "cache_hit_rate": round(cache_hit_rate, 4),
             "hitl_escalations": hitl_count,
+            "fallback_turns": fallback_count,
             "tools_invoked_count": sum(tools_dist.values()),
             "tools_distribution": tools_dist,
         }
