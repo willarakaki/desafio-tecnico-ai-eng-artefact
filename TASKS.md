@@ -65,10 +65,10 @@
 - **Validation:** `pytest tests/test_agent_routing.py -v`
 - **Commit:** `feat(agent): implement LangGraph orchestrator, HITL handoff and FinOps telemetry`
 
-## [ ] Task 6: Interaction Interfaces (Rich CLI & Streamlit UI)
+## [x] Task 6: Interaction Interfaces (Rich CLI & Streamlit UI)
 **Objective:** Deliver clean user interfaces with real-time architectural observability.
-- [ ] Implement `cli.py` using `rich` with session memory, live metadata display (invoked tools, cache status, latency), and commands `/clear`, `/metrics`, and `/exit`.
-- [ ] Implement `app.py` in Streamlit featuring:
+- [x] Implement `cli.py` using `rich` with session memory, live metadata display (invoked tools, cache status, latency), and commands `/clear`, `/metrics`, and `/exit`.
+- [x] Implement `app.py` in Streamlit featuring:
   - Interactive chat interface with the Empório da Música specialist persona.
   - **Observability & FinOps Sidebar** displaying Semantic Cache status, executed tools, turn latency, cumulative token cost, and a visual alert card when a Human-in-the-Loop (HITL) handoff ticket is triggered.
 - **Validation:** Smoke test both interfaces and verify clean imports.
