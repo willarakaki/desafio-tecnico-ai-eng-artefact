@@ -91,6 +91,12 @@ def render_sidebar(
                     st.badge(f"🛠 {t}")
             else:
                 st.caption("🛠 *Nenhuma ferramenta externa (Resposta direta ou Cache)*")
+
+            if getattr(last_telemetry, "fallback_used", False):
+                st.warning(
+                    f"⚠️ **Contingência (Fallback):** Modelo secundário "
+                    f"`{last_telemetry.provider}/{last_telemetry.model_name}` acionado!"
+                )
         else:
             st.info("Aguardando primeira interação para registrar telemetria.")
 

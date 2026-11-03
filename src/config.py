@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     )
 
     # Defense-in-Depth & Semantic Cache Settings
+    enable_model_fallback: bool = Field(
+        default=True,
+        description="Enable automatic model failover across providers",
+    )
+    fallback_providers: list[str] = Field(
+        default_factory=lambda: ["openai", "ollama"],
+        description="Ordered list of secondary fallback providers",
+    )
     semantic_cache_threshold: float = Field(
         default=0.92,
         description="Cosine similarity threshold for Semantic Cache hits",

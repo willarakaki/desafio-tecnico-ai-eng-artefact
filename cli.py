@@ -166,6 +166,11 @@ class RichCLI:
             f"🪙 [bold white]Tokens:[/] {tokens_info}  |  "
             f"💵 [bold white]Custo:[/] ${telemetry.estimated_cost_usd:.6f}"
         )
+        if telemetry.fallback_used:
+            meta_text += (
+                f"\n⚠️ [bold yellow]Contingência (Fallback):[/] "
+                f"Provedor {telemetry.provider} ({telemetry.model_name}) acionado com sucesso!"
+            )
         panel = Panel(
             meta_text,
             title="[dim]Telemetria & Observabilidade[/dim]",

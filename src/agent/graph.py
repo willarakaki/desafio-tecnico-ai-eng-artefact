@@ -16,7 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.agent.llm_factory import LLMFactory
+from src.agent.llm_factory import LLMFactory, extract_model_identifiers
 from src.agent.prompts import SYSTEM_PROMPT
 from src.agent.state import AgentState
 from src.cache.semantic_cache import SemanticCache, get_semantic_cache
@@ -63,6 +63,13 @@ class AgentTurnResult(BaseModel):
     )
     guardrail_blocked: bool = Field(
         default=False, description="Whether the turn was rejected by security guardrails."
+    )
+    fallback_used: bool = Field(
+        default=False, description="Whether fallback model was activated for this turn."
+    )
+    resolved_provider: str = Field(default="gemini", description="Provider that resolved the turn.")
+    resolved_model: str = Field(
+        default="gemini-2.5-flash", description="Model that resolved the turn."
     )
     tools_called: list[str] = Field(
         default_factory=list, description="List of tools invoked in this turn."
@@ -136,6 +143,7 @@ def build_emporio_graph(
     semantic_cache: SemanticCache,
     anonymizer: PIIAnonymizer,
     telemetry_manager: TelemetryManager,
+    fallback_models: list[Any] | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
     settings: Settings | None = None,
 ) -> CompiledStateGraph:
@@ -156,20 +164,19 @@ def build_emporio_graph(
         CompiledStateGraph ready for execution.
     """
     active_settings = settings or get_settings()
-    model_name = (
-        getattr(model, "model_name", None)
-        or getattr(model, "model", None)
-        or active_settings.gemini_synthesizer_model
+    provider_name, model_name = extract_model_identifiers(
+        model, default_provider=active_settings.llm_provider
     )
-    provider_name = active_settings.llm_provider
 
     tools_by_name = {t.name: t for t in tools}
 
-    # Bind tools to model if supported
-    try:
-        bound_model = model.bind_tools(tools)
-    except (NotImplementedError, AttributeError):
-        bound_model = model
+    # Build resilient model chain with fallbacks and tool bindings
+    bound_model = LLMFactory.create_resilient_chain(
+        primary=model,
+        fallbacks=fallback_models,
+        tools=tools,
+        primary_provider=provider_name,
+    )
 
     workflow = StateGraph(AgentState)
 
@@ -250,7 +257,42 @@ def build_emporio_graph(
             messages_to_send.append(SystemMessage(content=SYSTEM_PROMPT.strip()))
         messages_to_send.extend(raw_messages)
 
-        response = bound_model.invoke(messages_to_send)
+        try:
+            response = bound_model.invoke(messages_to_send)
+        except Exception as exc:
+            logger.error("All LLM providers failed in orchestrator: %s", exc)
+            from src.tools.hitl_tools import escalate_to_human
+
+            escalation_res = escalate_to_human(
+                reason="Falha total de provedores de IA (indisponibilidade técnica)",
+                case_summary=(
+                    "Incapacidade temporária de gerar resposta automática "
+                    f"por falha em todos os modelos: {exc}"
+                ),
+                urgency_level="critical",
+            )
+            ticket_data = escalation_res.ticket
+            fallback_msg = (
+                "No momento, nossos servidores inteligentes estão enfrentando uma "
+                "instabilidade momentânea. Para garantir seu atendimento, transferi sua "
+                "solicitação diretamente para nossa equipe humana no WhatsApp (67) 3321-4500 "
+                f"(Protocolo: {ticket_data.ticket_id})."
+            )
+            return {
+                "messages": [AIMessage(content=fallback_msg)],
+                "output_text": fallback_msg,
+                "fallback_used": True,
+                "resolved_provider": "all_failed_hitl",
+                "resolved_model": "hitl_fallback",
+                "requires_human_intervention": True,
+                "escalation_ticket": ticket_data.model_dump(),
+            }
+
+        res_meta = getattr(response, "response_metadata", {}) or {}
+        res_provider = str(res_meta.get("provider") or provider_name)
+        res_model = str(res_meta.get("model_name") or model_name)
+        primary_prov, _ = extract_model_identifiers(model, default_provider=provider_name)
+        was_fallback = state.get("fallback_used", False) or (res_provider != primary_prov)
 
         in_tok, out_tok, tot_tok = extract_tokens(response)
         prev_in = state.get("input_tokens", 0)
@@ -261,6 +303,9 @@ def build_emporio_graph(
             "input_tokens": prev_in + in_tok,
             "output_tokens": prev_out + out_tok,
             "total_tokens": prev_in + prev_out + tot_tok,
+            "fallback_used": was_fallback,
+            "resolved_provider": res_provider,
+            "resolved_model": res_model,
         }
 
     # ------------------------------------------------------------------------
@@ -405,8 +450,9 @@ def build_emporio_graph(
             requires_human_intervention=requires_hitl,
             escalation_ticket_id=ticket_id,
             guardrail_status=guardrail_status,
-            provider=provider_name,
-            model_name=str(model_name),
+            provider=str(state.get("resolved_provider") or provider_name),
+            model_name=str(state.get("resolved_model") or model_name),
+            fallback_used=state.get("fallback_used", False),
         )
 
         telemetry_manager.record_turn(telemetry)
@@ -425,6 +471,8 @@ def build_emporio_graph(
         return "orchestrator"
 
     def route_after_orchestrator(state: AgentState) -> str:
+        if state.get("requires_human_intervention") and state.get("output_text"):
+            return "finalize"
         messages = state.get("messages", [])
         if messages:
             last = messages[-1]
@@ -471,6 +519,7 @@ class EmporioAgent:
         self,
         settings: Settings | None = None,
         model: Any | None = None,
+        fallback_models: list[Any] | None = None,
         tools: list[StructuredTool] | None = None,
         duckdb_manager: DuckDBManager | None = None,
         retriever: HybridRetriever | None = None,
@@ -494,6 +543,12 @@ class EmporioAgent:
         self.recursion_limit = recursion_limit
 
         self.model = model or LLMFactory(settings=self.settings).get_synthesizer_llm()
+        if fallback_models is not None:
+            self.fallback_models = fallback_models
+        elif model is None:
+            self.fallback_models = LLMFactory(settings=self.settings).get_fallback_llms()
+        else:
+            self.fallback_models = []
         self.tools = (
             tools
             if tools is not None
@@ -511,6 +566,7 @@ class EmporioAgent:
             semantic_cache=self.semantic_cache,
             anonymizer=self.anonymizer,
             telemetry_manager=self.telemetry_manager,
+            fallback_models=self.fallback_models,
             checkpointer=self.checkpointer,
             settings=self.settings,
         )
@@ -601,6 +657,11 @@ class EmporioAgent:
                 latency_ms=round(elapsed_ms, 2),
                 cache_status=final_state.get("cache_status", "MISS"),
                 tools_called=final_state.get("tools_called", []),
+                fallback_used=final_state.get("fallback_used", False),
+                provider=str(final_state.get("resolved_provider") or self.settings.llm_provider),
+                model_name=str(
+                    final_state.get("resolved_model") or self.settings.gemini_synthesizer_model
+                ),
                 requires_human_intervention=final_state.get("requires_human_intervention", False),
             )
 
@@ -612,6 +673,13 @@ class EmporioAgent:
             escalation_ticket=final_state.get("escalation_ticket"),
             guardrail_blocked=final_state.get("guardrail_blocked", False),
             tools_called=final_state.get("tools_called", []),
+            fallback_used=final_state.get("fallback_used", False),
+            resolved_provider=str(
+                final_state.get("resolved_provider") or self.settings.llm_provider
+            ),
+            resolved_model=str(
+                final_state.get("resolved_model") or self.settings.gemini_synthesizer_model
+            ),
             telemetry=telemetry,
             messages=list(final_state.get("messages", [])),
         )

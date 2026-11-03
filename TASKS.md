@@ -74,12 +74,12 @@
 - **Validation:** Smoke test both interfaces and verify clean imports.
 - **Commit:** `feat(ui): add interactive Rich CLI and Streamlit interface with FinOps telemetry panel`
 
-## [ ] Task 7: Model Resiliency (Fallback Model) & Automated Generation of 5 Conversation Scenarios (`transcripts/`)
+## [x] Task 7: Model Resiliency (Fallback Model) & Automated Generation of 5 Conversation Scenarios (`transcripts/`)
 **Objective:** Enhance agent robustness with automatic provider failover (Fallback Model) and generate the mandatory interaction deliverables using the real agent pipeline.
-- [ ] Implement Fallback Model support in `src/agent/llm_factory.py` (via LangChain's `.with_fallbacks()` across primary and secondary LLM providers, e.g. Gemini -> OpenAI/Ollama) with graceful degradation to HITL if all providers fail.
-- [ ] Update `src/observability/telemetry.py` and `src/agent/graph.py` to record `fallback_used: bool` and the actual provider resolving the inference turn.
-- [ ] Add tests in `tests/test_llm_factory.py` and `tests/test_agent_routing.py` verifying fallback model activation on simulated API failures/rate limits (HTTP 429/500/timeout).
-- [ ] Create `scripts/generate_transcripts.py` to execute 5 realistic multi-turn conversations against the agent and export formatted Markdown files (including tool call traces and FinOps telemetry):
+- [x] Implement Fallback Model support in `src/agent/llm_factory.py` (via LangChain's `.with_fallbacks()` across primary and secondary LLM providers, e.g. Gemini -> OpenAI/Ollama) with graceful degradation to HITL if all providers fail.
+- [x] Update `src/observability/telemetry.py` and `src/agent/graph.py` to record `fallback_used: bool` and the actual provider resolving the inference turn.
+- [x] Add tests in `tests/test_llm_factory.py` and `tests/test_agent_routing.py` verifying fallback model activation on simulated API failures/rate limits (HTTP 429/500/timeout).
+- [x] Create `scripts/generate_transcripts.py` to execute 5 realistic multi-turn conversations against the agent and export formatted Markdown files (including tool call traces and FinOps telemetry):
   1. `transcripts/01_catalogo_violoes_ate_1000.md` (Filtered catalog search + instrument specification advice).
   2. `transcripts/02_preco_especifico_takamine_gd20.md` (Exact price lookup, stock availability, and payment rules).
   3. `transcripts/03_informacoes_gerais_e_endereco.md` (Store address in Campo Grande/MS, opening hours, and demonstration of a Semantic Cache `HIT`).
