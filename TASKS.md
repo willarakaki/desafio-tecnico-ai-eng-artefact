@@ -88,7 +88,7 @@
 - **Validation:** Confirm fallback resilience tests pass and all 5 files exist in `transcripts/` strictly reflecting real data from `data/`.
 - **Commit:** `feat(resilience): implement fallback model mechanism and generate 5 conversation scenarios with telemetry`
 
-## [ ] Task 8: Enterprise Backend — FastAPI REST & SSE Streaming API + Dockerization
+## [x] Task 8: Enterprise Backend — FastAPI REST & SSE Streaming API + Dockerization
 **Objective:** Deliver an enterprise-grade API tier aligning with production JD expectations (FastAPI backend wrapping LangGraph, Server-Sent Events streaming compatible with modern React/Next.js Vercel AI SDK, and 1-command Docker containerization).
 - [ ] Implement `src/api/server.py` with FastAPI:
   - `POST /api/chat`: synchronous turn execution returning structured JSON with response, FinOps telemetry, tools called, and HITL tickets.

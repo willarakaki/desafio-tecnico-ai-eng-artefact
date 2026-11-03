@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Generator
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
@@ -683,3 +684,223 @@ class EmporioAgent:
             telemetry=telemetry,
             messages=list(final_state.get("messages", [])),
         )
+
+    def stream(
+        self,
+        query: str,
+        session_id: str = "default",
+    ) -> Generator[dict[str, Any], None, None]:
+        """Stream a customer turn yielding step events, tool calls, and text tokens.
+
+        Yields dictionaries with format:
+            {"event": "<event_type>", "data": { ... }}
+
+        Where <event_type> is one of:
+            - 'step': Graph workflow step progress
+            - 'tool_call': Name and arguments of tools being invoked
+            - 'tool_result': Summary of tool execution
+            - 'token': Incremental text chunks of the assistant response
+            - 'done': Final turn result, telemetry, and execution flags
+            - 'error': Graph execution or timeout error details
+        """
+        start_time = time.perf_counter()
+
+        initial_state: AgentState = {
+            "messages": [HumanMessage(content=query)],
+            "session_id": session_id,
+            "cache_status": "MISS",
+            "requires_human_intervention": False,
+            "escalation_ticket": None,
+            "guardrail_blocked": False,
+            "guardrail_message": None,
+            "tools_called": [],
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "latency_ms": 0.0,
+            "output_text": None,
+        }
+
+        config = {
+            "configurable": {"thread_id": session_id},
+            "recursion_limit": self.recursion_limit,
+        }
+
+        yield {
+            "event": "step",
+            "data": {"step": "start", "session_id": session_id},
+        }
+
+        final_state: dict[str, Any] = {}
+        try:
+            for step_update in self.graph.stream(
+                initial_state, config=config, stream_mode="updates"
+            ):
+                for node_name, node_state in step_update.items():
+                    final_state.update(node_state)
+                    if node_name == "guardrail_and_cache":
+                        if node_state.get("guardrail_blocked"):
+                            yield {
+                                "event": "step",
+                                "data": {
+                                    "step": "guardrail",
+                                    "status": "blocked",
+                                    "message": node_state.get("guardrail_message"),
+                                },
+                            }
+                        elif node_state.get("cache_status") == "HIT":
+                            yield {
+                                "event": "step",
+                                "data": {"step": "cache", "status": "HIT"},
+                            }
+                        else:
+                            yield {
+                                "event": "step",
+                                "data": {
+                                    "step": "guardrail_and_cache",
+                                    "status": "passed",
+                                    "cache_status": node_state.get("cache_status", "MISS"),
+                                },
+                            }
+                    elif node_name == "orchestrator":
+                        messages = node_state.get("messages", [])
+                        if messages:
+                            last_msg = messages[-1]
+                            tool_calls = getattr(last_msg, "tool_calls", [])
+                            if tool_calls:
+                                for tc in tool_calls:
+                                    yield {
+                                        "event": "tool_call",
+                                        "data": {
+                                            "name": tc.get("name"),
+                                            "args": tc.get("args", {}),
+                                        },
+                                    }
+                            else:
+                                yield {
+                                    "event": "step",
+                                    "data": {"step": "orchestrator", "status": "synthesized"},
+                                }
+                    elif node_name == "tools":
+                        yield {
+                            "event": "tool_result",
+                            "data": {
+                                "tools_called": node_state.get("tools_called", []),
+                                "requires_human_intervention": node_state.get(
+                                    "requires_human_intervention", False
+                                ),
+                            },
+                        }
+                    elif node_name == "finalize":
+                        yield {
+                            "event": "step",
+                            "data": {"step": "finalize", "status": "completed"},
+                        }
+        except GraphRecursionError:
+            logger.warning(
+                "Graph recursion limit (%d) reached for session '%s' during streaming",
+                self.recursion_limit,
+                session_id,
+            )
+            fallback_msg = (
+                "Sua solicitação exigiu mais etapas do que o limite permitido para o "
+                "atendimento automático. Para garantir que seu caso seja resolvido, transferi o "
+                "contato para nossa equipe humana pelo WhatsApp (67) 3321-4500."
+            )
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            telemetry = TurnTelemetry(
+                session_id=session_id,
+                latency_ms=round(elapsed_ms, 2),
+                cache_status="MISS",
+                tools_called=["recursion_limit_fallback"],
+                requires_human_intervention=True,
+                provider=self.settings.llm_provider,
+                model_name="recursion_fallback",
+            )
+            self.telemetry_manager.record_turn(telemetry)
+            for chunk in _chunk_text(fallback_msg):
+                yield {"event": "token", "data": {"token": chunk}}
+            yield {
+                "event": "done",
+                "data": AgentTurnResult(
+                    output_text=fallback_msg,
+                    session_id=session_id,
+                    cache_status="MISS",
+                    requires_human_intervention=True,
+                    guardrail_blocked=False,
+                    tools_called=["recursion_limit_fallback"],
+                    telemetry=telemetry,
+                    messages=[HumanMessage(content=query), AIMessage(content=fallback_msg)],
+                ).model_dump(),
+            }
+            return
+        except Exception as exc:
+            logger.error("Error during agent stream: %s", exc)
+            yield {"event": "error", "data": {"error": str(exc)}}
+            return
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+
+        session_turns = self.telemetry_manager.get_session_turns(session_id)
+        if session_turns:
+            telemetry = session_turns[-1]
+            telemetry.latency_ms = round(elapsed_ms, 2)
+        else:
+            telemetry = TurnTelemetry(
+                session_id=session_id,
+                latency_ms=round(elapsed_ms, 2),
+                cache_status=final_state.get("cache_status", "MISS"),
+                tools_called=final_state.get("tools_called", []),
+                fallback_used=final_state.get("fallback_used", False),
+                provider=str(final_state.get("resolved_provider") or self.settings.llm_provider),
+                model_name=str(
+                    final_state.get("resolved_model") or self.settings.gemini_synthesizer_model
+                ),
+                requires_human_intervention=final_state.get("requires_human_intervention", False),
+            )
+
+        output_text = final_state.get("output_text") or "Atendimento concluído."
+
+        for chunk in _chunk_text(output_text):
+            yield {"event": "token", "data": {"token": chunk}}
+
+        turn_result = AgentTurnResult(
+            output_text=output_text,
+            session_id=session_id,
+            cache_status=final_state.get("cache_status", "MISS"),
+            requires_human_intervention=final_state.get("requires_human_intervention", False),
+            escalation_ticket=final_state.get("escalation_ticket"),
+            guardrail_blocked=final_state.get("guardrail_blocked", False),
+            tools_called=final_state.get("tools_called", []),
+            fallback_used=final_state.get("fallback_used", False),
+            resolved_provider=str(
+                final_state.get("resolved_provider") or self.settings.llm_provider
+            ),
+            resolved_model=str(
+                final_state.get("resolved_model") or self.settings.gemini_synthesizer_model
+            ),
+            telemetry=telemetry,
+            messages=list(final_state.get("messages", [])),
+        )
+
+        yield {
+            "event": "done",
+            "data": turn_result.model_dump(),
+        }
+
+
+def _chunk_text(text: str, chunk_size: int = 4) -> list[str]:
+    """Split text into conversational word chunks for progressive streaming."""
+    words = text.split(" ")
+    chunks: list[str] = []
+    current: list[str] = []
+    for i, w in enumerate(words):
+        current.append(w)
+        if len(current) >= chunk_size or i == len(words) - 1:
+            chunk = " ".join(current)
+            if i < len(words) - 1:
+                chunk += " "
+            chunks.append(chunk)
+            current = []
+    return chunks if chunks else [text]

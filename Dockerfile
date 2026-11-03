@@ -24,9 +24,11 @@ RUN uv sync --no-dev && \
 USER appuser
 ENV PATH="/app/.venv/bin:$PATH"
 
-EXPOSE 8501
+# Expose FastAPI backend (8000) and Streamlit frontend (8501)
+EXPOSE 8000 8501
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Default command starts the enterprise FastAPI backend
+CMD ["uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
