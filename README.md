@@ -4,12 +4,12 @@
 [![LangGraph](https://img.shields.io/badge/agent-LangGraph-purple.svg)](https://langchain-ai.github.io/langgraph/)
 [![DuckDB](https://img.shields.io/badge/structured_data-DuckDB-yellow.svg)](https://duckdb.org/)
 [![Hybrid RAG](https://img.shields.io/badge/policy_rag-BM25_%2B_FAISS-orange.svg)](src/rag/)
-[![Tests Passing](https://img.shields.io/badge/tests-170%20passed-brightgreen.svg)](tests/)
+[![CI](https://github.com/willarakaki/desafio-tecnico-ai-eng-artefact/actions/workflows/ci.yml/badge.svg)](https://github.com/willarakaki/desafio-tecnico-ai-eng-artefact/actions)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 > **Artefact Technical Challenge — AI Engineer**  
-> A clean, deterministic Python customer support agent built for **Empório da Música** (a musical instruments store in Campo Grande/MS, Brazil). Designed around **logical reasoning and pragmatic simplicity**: every architectural element solves a concrete data or reliability requirement discovered in the store's files, using lightweight, in-memory Python primitives with **zero external database or infrastructure dependencies**.
+> A clean, tool-grounded Python customer support agent built for **Empório da Música** (a musical instruments store in Campo Grande/MS, Brazil). Designed around **logical reasoning and pragmatic simplicity**: every architectural element solves a concrete data or reliability requirement discovered in the store's files, using lightweight, in-memory Python primitives with **zero external database or infrastructure dependencies**.
 
 ---
 
@@ -22,7 +22,7 @@
    - [3.3. Commands to Run (CLI, Streamlit UI, API, Docker & Tests)](#33-commands-to-run-cli-streamlit-ui-api-docker--tests)
 4. [Technical Decisions & Logical Justifications](#4-technical-decisions--logical-justifications)
    - [4.1. Agent Framework & Approach (Single-Graph LangGraph + Function Calling)](#41-agent-framework--approach-single-graph-langgraph--function-calling)
-   - [4.2. Model & Provider Choice (`LLMFactory` + Optional Failover)](#42-model--provider-choice-llmfactory--optional-failover)
+   - [4.2. Model & Provider Choice (`LLMFactory`, Sampling & Unified Agent Node)](#42-model--provider-choice-llmfactory-sampling--unified-agent-node)
    - [4.3. Data Treatment & Structured Lookup (In-Memory DuckDB vs. Text-to-SQL)](#43-data-treatment--structured-lookup-in-memory-duckdb-vs-text-to-sql)
    - [4.4. Policy Retrieval Architecture (In-Memory Hybrid RAG: BM25 + FAISS)](#44-policy-retrieval-architecture-in-memory-hybrid-rag-bm25--faiss)
    - [4.5. Prompt Strategy, Store Persona & Anti-Hallucination Rules](#45-prompt-strategy-store-persona--anti-hallucination-rules)
@@ -132,10 +132,11 @@ Edit `.env` to choose your preferred provider via `LLM_PROVIDER` (validated cent
 ```env
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_ROUTER_MODEL=gemini-3.5-flash-lite        # Also supports gemini-2.5-flash
+GEMINI_ROUTER_MODEL=gemini-3.5-flash-lite
 GEMINI_SYNTHESIZER_MODEL=gemini-3.5-flash-lite
 GEMINI_EMBEDDING_MODEL=models/gemini-embedding-001
 ```
+*Note: `gemini-3.5-flash-lite` is the current universally accessible Flash-Lite model on Google AI Studio with a generous free tier (zero cost for prompt and output tokens on standard free quota). `models/gemini-embedding-001` remains fully supported through May 2028.*
 
 #### Option 2 — OpenAI
 ```env
@@ -215,12 +216,13 @@ uv run python scripts/generate_transcripts.py
 
 ---
 
-### 4.2. Model & Provider Choice (`LLMFactory` + Optional Failover)
-- **Reasoning:** For customer support, latency and reliable structured tool calling matter more than frontier reasoning cost. Compact flash/mini class models (`gemini-3.5-flash-lite` / `gemini-2.5-flash`, `gpt-4o-mini`, or local `qwen2.5:7b`) provide sub-second tool selection at fractions of a cent per 1,000 turns.
-- **Decoupled Factory (`src/agent/llm_factory.py`):** Centralizes model and embedding instantiation behind two temperature profiles:
-  - **Router / Tool Calling (`temperature=0.0`):** Maximizes determinism when choosing tools and extracting filter parameters (`max_price=1000`, `order_id=4`).
-  - **Response Synthesis (`temperature=0.2`):** Allows natural, empathetic phrasing in Portuguese while staying strictly anchored to tool outputs.
-- **Resilience:** When secondary credentials are available, `.with_fallbacks()` automatically fails over across providers on HTTP `429`/`500` errors; if all providers fail, the agent degrades safely by opening a human support ticket.
+### 4.2. Model & Provider Choice (`LLMFactory`, Sampling & Unified Agent Node)
+- **Model Efficiency & Cost Profile:** For customer support, low latency and reliable structured tool calling matter more than frontier reasoning cost. Compact flash/mini class models (`gemini-3.5-flash-lite`, `gpt-4o-mini`, or local `qwen2.5:7b`) provide sub-second tool selection at fractions of a cent per turn (~$0.05 to $1.50 per 1,000 turns depending on context length and whether Google's free tier, paid tier, or OpenAI is used).
+- **Sampling Parameters across Providers:**
+  - On OpenAI (`gpt-4o-mini`) and Ollama (`qwen2.5`), the factory supports temperature tuning (`0.0` for routing, `0.2` for synthesis).
+  - On Google Gemini (`gemini-3.5-flash-lite`), modern Gemini API specifications deprecate sampling parameters (`temperature`, `top_p`, `top_k`) in favor of standardized, stable tool-calling inference.
+- **Factory Flexibility vs. Unified LangGraph Node:** While `src/agent/llm_factory.py` provides separate factory methods (`get_router_llm` and `get_synthesizer_llm`) to accommodate multi-model architectures, `src/agent/graph.py` pragmatically unifies tool calling and consultative response generation into a **single compiled agent node** (`self.model = model or LLMFactory().get_synthesizer_llm()`). This avoids the latency penalty of two sequential LLM calls per turn while preserving decoupled provider configuration.
+- **Resilience:** When secondary credentials are configured, `.with_fallbacks()` automatically fails over across providers on HTTP `429`/`500` errors; if all providers fail, the agent degrades safely by opening an auditable human support ticket.
 
 ---
 
@@ -244,7 +246,7 @@ Before writing any code, I profiled all **6 operational CSV files** (`categories
 ### 4.5. Prompt Strategy, Store Persona & Anti-Hallucination Rules
 Implemented in `src/agent/prompts.py`, the System Prompt was engineered around three practical principles:
 1. **Store-Aligned Persona (Section 7 of Policy Manual):** Warm, consultative musical instrument specialist in Campo Grande/MS who communicates naturally in Brazilian Portuguese and understands instrument construction (spruce/cedar tops, mahogany/sapele bodies, nylon vs. steel strings) without inventing facts.
-2. **Deliberate Omission of Detailed Policy Rules (Forcing RAG Grounding):** While core store identity (address, hours, instrument-only scope) is present in the System Prompt, detailed rules on returns, warranty exclusions, freight tables, and installment minimums are **intentionally omitted** from the prompt with a mandatory directive to call `consult_store_policies`. This ensures policy answers come from retrieved PDF sections rather than approximate prompt memory.
+2. **Persona Grounding vs. Dynamic Tool Lookup:** While basic store identity (physical address, opening hours, instrument-only scope) is present in the System Prompt for immediate persona consistency, detailed normative rules (returns, warranty exclusions, freight tiers, installment minimums) are **deliberately omitted** from the prompt with a mandatory directive to call `consult_store_policies`. Furthermore, when customers ask about address or opening hours, the agent dynamically invokes `consult_store_policies` (or hits the Semantic Cache) to guarantee complete factual groundedness against the official PDF manual (as demonstrated in Transcript 03).
 3. **Explicit Negative Constraints:**
    - Never guess prices, stock, order status, or policy deadlines without tool calls.
    - **Non-cumulative discounts:** The 5% PIX discount never stacks onto an active promotional price.
@@ -328,16 +330,18 @@ Five multi-turn conversations were generated through the agent pipeline (`script
 
 ## 6. Known Limitations & What Would Be Done With More Time
 
-### 6.1. Current Known Limitations (Intentional Prototype Trade-Offs)
-To keep local setup simple, fast, and dependency-free for evaluation, the prototype has the following known limitations:
+### 6.1. Current Known Limitations (Honest Prototype Trade-Offs)
+To keep setup simple, fast, and self-contained for evaluation, the prototype has the following documented limitations:
+- **Offline Mock Testing vs. Live LLM Non-Determinism:** All 170 automated pytest tests run in CI using `DeterministicAgentChatModel` and `DeterministicMockEmbeddings`. This ensures ultra-fast (<40s), zero-cost, and non-flaky verification of graph transitions, DuckDB queries, PII masking, and cache logic, but does not evaluate non-deterministic generative drift or live LLM instruction-following under real API traffic.
+- **Heuristic Retrieval Weights & Cache Threshold:** The Hybrid RAG weights (`BM25 = 0.4`, `FAISS = 0.6`) and Semantic Cache threshold (`similarity >= 0.92`) were selected based on domain heuristics (exact lexical match for numeric codes/deadlines vs. dense semantic match for natural language). They have not yet undergone systematic Bayesian optimization or Grid Search over a labeled ground-truth evaluation split.
+- **Gemini 3.5 Flash-Lite Default Thinking Level:** Gemini 3.5 Flash-Lite defaults to `minimal` thinking effort. For high-complexity autonomous planning and multi-step agentic workflows, Google officially recommends elevating the thinking level to `medium` or `high` to maximize tool-calling precision.
+- **LGPD Compliance on the Free Tier:** Under Google AI Studio's standard Free Tier terms of service, prompt inputs and outputs may be reviewed and used to improve Google products. While the pipeline applies client-side regex masking to CPF, phone, and email before telemetry logging, commercial deployment requiring strict LGPD compliance must utilize Google Cloud Vertex AI (Paid Tier) or local open-weights execution (Ollama) to guarantee zero third-party data retention.
 - **In-Memory Ephemeral State (`MemorySaver` & `SemanticCache`):** Conversation history and cached FAQ embeddings live in Python process memory. Restarting the application clears active sessions and cached embeddings, and state is not shared across multiple worker processes.
 - **Static Read-Only CSV Snapshot:** DuckDB loads `data/*.csv` into memory on startup. While fast and deterministic, stock deductions, order creations, or live ERP updates are not persisted back to a transactional database.
 - **Cold-Start Policy Embedding (~1–2s on First Query):** The 8-page policy PDF is embedded into local FAISS upon initial retriever initialization rather than loaded from a pre-persisted vector index.
-- **Heuristic Pre-LLM Guardrail:** Input filtering relies on curated regular expressions and keyword rules. It catches standard SQLi, prompt-leak overrides, and obvious off-topic requests at zero cost, whereas subtle multilingual jailbreaks rely on the LLM's system-prompt boundaries.
-- **Simulated WhatsApp Channel:** Although the agent implements the exact WhatsApp persona from Section 7 of the policy manual and exposes REST/SSE endpoints, it is interacted with via CLI, Streamlit, or HTTP rather than a live Meta WhatsApp Business webhook.
 
 ### 6.2. What Would Be Done With More Time
-With additional time to evolve this prototype into a production system for Empório da Música, I would prioritize:
+With additional time to evolve this prototype into an enterprise production system for Empório da Música, I would prioritize:
 1. **Persistent Session Memory & Shared Cache:** Replace `MemorySaver` with `AsyncPostgresSaver` and move the Semantic Cache to **Redis Vector Search** with TTLs and automatic cache invalidation whenever product prices or promotions change.
 2. **Automated LLM Quality Evaluation (Ragas / DeepEval in CI):** Complement the 170 deterministic unit/integration tests with an automated evaluation dataset of 100+ realistic Portuguese customer conversations measuring *Faithfulness*, *Answer Relevancy*, and *Tool Selection Precision* on prompt/model changes.
 3. **WhatsApp Business Cloud API Integration:** Connect the FastAPI server to Meta's official WhatsApp webhook (including audio message transcription for voice notes, which are common in Brazilian retail WhatsApp support) and connect `escalate_to_human` directly to the store team's shared inbox/CRM.
@@ -350,35 +354,54 @@ With additional time to evolve this prototype into a production system for Empó
 
 In accordance with the challenge deliverable guidelines, I disclose the use of **Google Antigravity** as my AI coding assistant during development, operating under a structured, human-led **Spec-Driven + Test-Driven Development (TDD)** workflow.
 
-### How the Assistant Was Used (Workflow)
-Rather than generating monolithic code from vague prompts, the engineering workflow was structured into explicit human-controlled stages:
+### Models Used in Google Antigravity
+- **Gemini 3.8 Flash (High):** Primary model utilized for rapid TDD test generation, Pydantic v2 schema scaffolding, and code formatting with sub-second latency.
+- **Gemini 4 Argon (High):** Utilized for deep architectural reasoning, cross-framework dependency audits (LangGraph + FastAPI SSE + DuckDB macros), and security review.
 
-1. **Upfront Data Inspection & Architecture Design (Human-Led):**  
-   Before writing application code, I inspected every CSV schema, row count, promotion flag, stock anomaly, and all 8 pages of `políticas_da_loja.pdf`. Those findings and architectural boundaries were codified in [`docs/architecture.md`](docs/architecture.md) and workspace engineering rules in [`AGENTS.md`](AGENTS.md) (e.g., *no raw LLM-generated SQL*, *no hardcoded API keys*, *strict transactional cache bypass*).
-2. **Atomic Task Decomposition (`TASKS.md`):**  
-   The solution was broken down into incremental, reviewable milestones (Tasks 0 through 9: Setup & Profiling $\rightarrow$ Config/`LLMFactory` $\rightarrow$ DuckDB Tools $\rightarrow$ Hybrid RAG $\rightarrow$ Guardrails/Cache/PII $\rightarrow$ LangGraph & HITL $\rightarrow$ CLI/Streamlit UI $\rightarrow$ Failover & Transcripts $\rightarrow$ FastAPI/Docker $\rightarrow$ Documentation).
-3. **Custom TDD Quality Gate Skill (`.agents/skills/tdd-commit-gate/SKILL.md`):**  
-   I authored a custom workspace skill instructing the assistant to work on one dedicated Git branch per task, run `ruff check` / `ruff format`, validate every module with deterministic `pytest` unit and integration tests (170 tests total, offline-capable via mock LLMs/embeddings), and push atomic branches for **manual human Pull Request review and GitHub Actions CI verification** before merging into `main`.
+### Human-in-the-Loop Governance & Concrete Corrections
+Rather than treating AI as an autonomous black-box code generator, I exercised strict human architectural control. Three concrete examples where I corrected or rejected initial AI proposals include:
 
-This workflow kept full architectural and logical control in human hands while accelerating boilerplate, test coverage, and documentation polish.
+1. **Enforcing Anti-IDOR Security in Order Tracking (Commit `692245f`):**  
+   *AI Initial Output:* The assistant initially generated a simple order lookup tool where any anonymous user providing only an order number (`#5`) would receive full customer name, city, items, and tracking code.  
+   *My Intervention:* I rejected this insecure design and enforced anti-IDOR authentication in `src/tools/order_tools.py` and `src/agent/prompts.py`: requiring the customer to provide their matching email or registered phone before disclosing sensitive order details, preventing unauthorized horizontal data leakage.
+
+2. **Resolving Presidio PII Masking False Positives on Store Contacts (Commit `692245f`):**  
+   *AI Initial Output:* The initial PII anonymizer applied aggressive regex patterns that redacted the store's own official contact information (`(67) 3341-4444`, `(67) 3321-4500`, and `contato@emporiodamusica.com.br`) as `[PHONE_REDACTED]` and `[EMAIL_REDACTED]`.  
+   *My Intervention:* I introduced explicit whitelisting in `src/security/pii_anonymizer.py` (`INSTITUTIONAL_PHONES_DIGITS` and `INSTITUTIONAL_EMAILS`) so the agent can freely provide store contact channels while redacting customer PII.
+
+3. **LangSmith Environment Collision & Gemini `thought_signature` Patch (Commit `fdac9ca`):**  
+   *AI Initial Output:* The initial observability configuration exported `LANGSMITH_AGENT_ID` into the environment, causing an `EnvAddressError` collision with project addresses in LangSmith. Furthermore, sequential Gemini 3.x tool calls dropped required cryptographic `thought_signature` bytes, causing Google API 400 errors.  
+   *My Intervention:* I diagnosed the collisions, sanitized environment variable propagation in `src/config.py`, and authored `_apply_gemini_thought_signature_patch` in `src/agent/llm_factory.py` to preserve thought signatures across multi-turn tool calling.
 
 ---
 
 ## 8. Repository Structure
 
 ```text
-emporio-da-musica-agent/
-├── .agents/skills/tdd-commit-gate/   # Custom TDD & atomic-branch workflow skill
-├── .github/workflows/ci.yml          # GitHub Actions CI (Ruff + 170 Pytest tests)
-├── data/                             # Provided operational CSVs (6) & Policy PDF
-├── docs/architecture.md              # Data profiling dictionary & architecture spec
-├── scripts/generate_transcripts.py   # Script generating the 5 multi-turn transcripts
+desafio-tecnico-ai-eng-artefact/
+├── .agents/
+│   └── skills/
+│       └── tdd-commit-gate/SKILL.md  # Custom agentic TDD quality gate skill
+├── .github/
+│   └── workflows/ci.yml              # GitHub Actions CI (Ruff + 170 Pytest tests)
+├── data/
+│   ├── desafio_tecnico_ai_eng - categories.csv
+│   ├── desafio_tecnico_ai_eng - customers.csv
+│   ├── desafio_tecnico_ai_eng - order_items.csv
+│   ├── desafio_tecnico_ai_eng - orders.csv
+│   ├── desafio_tecnico_ai_eng - products.csv
+│   ├── desafio_tecnico_ai_eng - promotions.csv
+│   └── políticas_da_loja.pdf         # Internal store policy & procedure manual (8 pages)
+├── docs/
+│   └── architecture.md               # Detailed system architecture & mapped data dictionary
+├── scripts/
+│   └── generate_transcripts.py       # Script generating the 5 multi-turn transcripts
 ├── src/
 │   ├── agent/                        # LangGraph state machine, LLMFactory & prompts
 │   ├── api/                          # FastAPI REST & SSE server (/docs, /api/chat)
 │   ├── cache/                        # Context-aware Semantic Cache + bypass rules
 │   ├── database/                     # In-memory DuckDB ingestion & text normalization
-│   ├── observability/                # Turn latency, token & FinOps cost telemetry
+│   ├── observability/                # Turn latency, token, and FinOps cost telemetry
 │   ├── rag/                          # Section-aware PDF loader + BM25/FAISS retriever
 │   ├── security/                     # Rate limiter, input guardrails & LGPD PII masker
 │   ├── tools/                        # Typed Pydantic v2 tools (catalog, orders, RAG, HITL)
@@ -386,10 +409,16 @@ emporio-da-musica-agent/
 ├── tests/                            # 170 unit & integration tests
 ├── transcripts/                      # 5 conversation examples (.md) with tool traces
 ├── .env.example                      # Environment variable template
+├── AGENTS.md                         # Workspace engineering & data governance rules
 ├── app.py                            # Streamlit chat UI with observability sidebar
 ├── cli.py                            # Rich interactive terminal interface
-├── Dockerfile & docker-compose.yml   # Optional 1-command containerized execution
-├── pyproject.toml & requirements.txt # Dependency manifests (uv & pip compatible)
+├── Dockerfile                        # Multi-stage lightweight container
+├── docker-compose.yml                # Multi-service Docker Compose (FastAPI + Streamlit)
+├── LICENSE                           # Official MIT license
+├── pyproject.toml                    # Project metadata, dependencies & tool configs
+├── requirements.txt                  # Standard pip dependency manifest
+├── TASKS.md                          # Granular roadmap & execution milestones
+├── uv.lock                           # Deterministic dependency lockfile
 └── README.md                         # Project documentation & technical justifications
 ```
 
@@ -397,4 +426,4 @@ emporio-da-musica-agent/
 
 ## License
 
-Released under the **MIT License**. Developed for the **Artefact Brazil — AI Engineer Technical Challenge**.
+Released under the **[MIT License](LICENSE)**. Developed for the **Artefact Brazil — AI Engineer Technical Challenge**.
