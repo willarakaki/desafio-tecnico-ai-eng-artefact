@@ -1,5 +1,11 @@
 # Empório da Música — Intelligent Customer Support Agent
 
+> **Artefact Technical Challenge — AI Engineer – Full-Stack para Aplicações com IA Generativa**  
+> **Candidate:** Willian Arakaki  
+> **Public GitHub Repository:** [https://github.com/willarakaki/desafio-tecnico-ai-eng-artefact](https://github.com/willarakaki/desafio-tecnico-ai-eng-artefact)
+> 
+> A clean, tool-grounded Python customer support agent built for **Empório da Música** (a musical instruments store in Campo Grande/MS, Brazil). Designed around **logical reasoning and pragmatic simplicity**: every architectural element solves a concrete data or reliability requirement discovered in the store's files, using lightweight, in-memory Python primitives with **zero external database or infrastructure dependencies**.
+
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![LangGraph](https://img.shields.io/badge/agent-LangGraph-purple.svg)](https://langchain-ai.github.io/langgraph/)
 [![DuckDB](https://img.shields.io/badge/structured_data-DuckDB-yellow.svg)](https://duckdb.org/)
@@ -7,9 +13,6 @@
 [![CI](https://github.com/willarakaki/desafio-tecnico-ai-eng-artefact/actions/workflows/ci.yml/badge.svg)](https://github.com/willarakaki/desafio-tecnico-ai-eng-artefact/actions)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-> **Artefact Technical Challenge — AI Engineer**  
-> A clean, tool-grounded Python customer support agent built for **Empório da Música** (a musical instruments store in Campo Grande/MS, Brazil). Designed around **logical reasoning and pragmatic simplicity**: every architectural element solves a concrete data or reliability requirement discovered in the store's files, using lightweight, in-memory Python primitives with **zero external database or infrastructure dependencies**.
 
 ---
 
