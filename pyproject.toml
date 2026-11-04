@@ -30,6 +30,9 @@ dependencies = [
     "presidio-anonymizer>=2.2.355,<3.0.0",
     "rich>=13.9.0,<15.0.0",
     "streamlit>=1.41.0,<2.0.0",
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn>=0.32.0,<1.0.0",
+    "httpx>=0.28.0,<1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -72,6 +75,17 @@ ignore = [
     "RUF001", # allow Portuguese en/em dashes in strings
     "RUF002", # allow Portuguese en/em dashes in docstrings
     "RUF003", # allow Portuguese en/em dashes in comments
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Body",
+    "fastapi.params.Depends",
+    "fastapi.params.Query",
+    "fastapi.params.Header",
 ]
 
 [tool.ruff.format]

@@ -29,6 +29,13 @@ def format_cache_badge(status: str) -> str:
     return "🟡 MISS"
 
 
+def format_latency(ms: float) -> str:
+    """Format latency into a compact, human-readable string."""
+    if ms >= 1000.0:
+        return f"{ms / 1000.0:.2f} s"
+    return f"{ms:.0f} ms"
+
+
 def format_usd_cost(cost: float) -> str:
     """Format USD inference cost with 6 decimal places."""
     return f"${cost:.6f}"
@@ -61,6 +68,15 @@ def render_sidebar(
 ) -> None:
     """Render the Observability, FinOps, and HITL sidebar."""
     with st.sidebar:
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stMetricValue"] { font-size: 1.12rem !important; }
+            div[data-testid="stMetricLabel"] { font-size: 0.85rem !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         st.title("📊 Observabilidade & FinOps")
         st.caption(
             f"Provedor Ativo: **{settings.llm_provider.upper()}** | "
@@ -71,13 +87,17 @@ def render_sidebar(
         # Section 1: Live Turn Telemetry (Most Recent Turn)
         st.subheader("⚡ Telemetria do Último Turno")
         if last_telemetry is not None:
-            st.markdown(f"**Cache Semântico:** {format_cache_badge(last_telemetry.cache_status)}")
+            st.markdown(f"**Status do Cache:** {format_cache_badge(last_telemetry.cache_status)}")
+            if str(last_telemetry.cache_status).upper() == "BYPASS_TRANSACTIONAL":
+                st.caption(
+                    "🛡️ *Desativado para este turno: proteção LGPD de pedidos e dados pessoais.*"
+                )
 
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Latência", f"{last_telemetry.latency_ms:.1f} ms")
+                st.metric("Latência", format_latency(last_telemetry.latency_ms))
             with col2:
-                st.metric("Custo do Turno", format_usd_cost(last_telemetry.estimated_cost_usd))
+                st.metric("Custo Turno", format_usd_cost(last_telemetry.estimated_cost_usd))
 
             st.caption(
                 f"**Tokens:** {last_telemetry.total_tokens} "
@@ -111,8 +131,8 @@ def render_sidebar(
             st.metric("Turnos Totais", session_metrics["total_turns"])
             st.metric("Taxa Cache Hit", f"{session_metrics['cache_hit_rate'] * 100:.1f}%")
         with m_col2:
-            st.metric("Custo Total (USD)", format_usd_cost(session_metrics["total_cost_usd"]))
-            st.metric("Latência Média", f"{session_metrics['average_latency_ms']:.1f} ms")
+            st.metric("Custo Total", format_usd_cost(session_metrics["total_cost_usd"]))
+            st.metric("Latência Média", format_latency(session_metrics["average_latency_ms"]))
 
         st.caption(
             f"**Distribuição do Cache:** "
@@ -120,6 +140,12 @@ def render_sidebar(
             f"Misses: {session_metrics['cache_misses']} | "
             f"Bypasses: {session_metrics['cache_bypasses']}"
         )
+        if session_metrics["cache_hits"] > 0:
+            saved_tokens = session_metrics["cache_hits"] * 3400
+            saved_usd = (saved_tokens / 1_000_000.0) * 0.075
+            st.success(
+                f"💰 **Economia pelo Cache:** ~{saved_tokens:,} tokens ({format_usd_cost(saved_usd)} USD poupados!)"
+            )
 
         tools_dist = session_metrics.get("tools_distribution", {})
         if tools_dist:
@@ -179,14 +205,15 @@ def render_chat_history(messages: list[dict[str, Any]]) -> None:
             st.markdown(msg["content"])
             if msg.get("ticket"):
                 t = msg["ticket"]
+                sla_text = t.get("sla") or f"{t.get('contact_sla_hours', 24)} horas úteis"
                 st.warning(
                     f"🚨 **Escalação para Atendimento Humano Registrada**\n\n"
                     f"• **Protocolo:** `{t.get('ticket_id')}`\n"
                     f"• **Motivo:** {t.get('reason')}\n"
                     f"• **Urgência:** `{str(t.get('urgency_level', '')).upper()}`\n"
-                    f"• **Prazo de Retorno:** até {t.get('contact_sla_hours', 24)} horas úteis\n\n"
-                    f"*Nossa equipe especializada entrará em contato ou você pode nos chamar "
-                    f"diretamente no WhatsApp **(67) 3321-4500**.*"
+                    f"• **Prazo de Retorno:** até {sla_text}\n\n"
+                    f"*Um especialista humano da nossa equipe assumirá este protocolo na fila "
+                    f"de atendimento (referência direta da loja: **(67) 3321-4500**).*"
                 )
 
 
@@ -313,15 +340,15 @@ def main() -> None:
 
             if turn_result.requires_human_intervention:
                 t = turn_result.escalation_ticket or {}
-                sla = t.get("contact_sla_hours", 24)
+                sla_text = t.get("sla") or f"{t.get('contact_sla_hours', 24)} horas úteis"
                 st.warning(
                     f"🚨 **Escalação para Atendimento Humano Registrada**\n\n"
                     f"• **Protocolo:** `{t.get('ticket_id', 'TKT-PENDING')}`\n"
                     f"• **Motivo:** {t.get('reason', 'Solicitação fora da política padrão')}\n"
                     f"• **Urgência:** `{str(t.get('urgency_level', 'medium')).upper()}`\n"
-                    f"• **Prazo de Retorno:** até {sla} horas úteis\n\n"
-                    f"*Nossa equipe especializada entrará em contato ou você pode nos chamar "
-                    f"diretamente no WhatsApp **(67) 3321-4500**.*"
+                    f"• **Prazo de Retorno:** até {sla_text}\n\n"
+                    f"*Um especialista humano da nossa equipe assumirá este protocolo na fila "
+                    f"de atendimento (referência direta da loja: **(67) 3321-4500**).*"
                 )
 
         # Update State & Telemetry

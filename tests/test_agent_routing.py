@@ -705,3 +705,135 @@ def test_agent_routing_all_providers_failure_hitl_degradation() -> None:
     assert "TKT-" in result.output_text
     assert result.telemetry.requires_human_intervention is True
     assert result.telemetry.fallback_used is True
+
+
+def test_multi_step_sequential_tool_calls_succeed_within_recursion_limit() -> None:
+    """Verify multi-round sequential tool calls (e.g. LGPD check + customer lookup + RAG) succeed."""
+    mock_model = MagicMock(spec=BaseChatModel)
+    mock_model.bind_tools.return_value = mock_model
+    mock_model.invoke.side_effect = [
+        # Round 1: check order #5 against Bruno Martins (triggers LGPD mismatch)
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "get_order_status",
+                    "args": {
+                        "order_id": 5,
+                        "customer_identifier": "bruno.martins@jmail.com",
+                    },
+                    "id": "call_step_1",
+                }
+            ],
+            usage_metadata={"input_tokens": 80, "output_tokens": 20, "total_tokens": 100},
+        ),
+        # Round 2: look up Bruno's real order + consult store withdrawal policy
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "get_order_status",
+                    "args": {"customer_identifier": "bruno.martins@jmail.com"},
+                    "id": "call_step_2a",
+                },
+                {
+                    "name": "consult_store_policies",
+                    "args": {"question": "direito de arrependimento devolução 7 dias"},
+                    "id": "call_step_2b",
+                },
+            ],
+            usage_metadata={"input_tokens": 140, "output_tokens": 30, "total_tokens": 170},
+        ),
+        # Round 3: final synthesis
+        AIMessage(
+            content=(
+                "Olá, Bruno! Por segurança e conformidade com a LGPD, identifiquei que o pedido #5 "
+                "não está vinculado ao seu e-mail, mas localizei o seu pedido #10 (status confirmado). "
+                "Sobre o direito de arrependimento (CDC), você tem até 7 dias corridos após o "
+                "recebimento com frete reverso por conta da loja."
+            ),
+            usage_metadata={"input_tokens": 220, "output_tokens": 60, "total_tokens": 280},
+        ),
+    ]
+
+    settings = Settings()
+    mock_embeddings = DeterministicMockEmbeddings()
+    cache = SemanticCache(embeddings=mock_embeddings, settings=settings)
+    from src.rag.hybrid_retriever import HybridRetriever
+
+    retriever = HybridRetriever(embeddings=mock_embeddings)
+    agent = EmporioAgent(
+        settings=settings,
+        model=mock_model,
+        semantic_cache=cache,
+        retriever=retriever,
+    )
+
+    result = agent.run(
+        "Meu nome é Bruno Martins e meu email é bruno.martins@jmail.com. "
+        "Qual o status do meu pedido #5? Quero saber como funciona devolução por arrependimento.",
+        session_id="multi_round_bruno",
+    )
+
+    assert "recursion_limit_fallback" not in result.tools_called
+    assert "get_order_status" in result.tools_called
+    assert "consult_store_policies" in result.tools_called
+    assert result.requires_human_intervention is False
+    assert "pedido #10" in result.output_text
+
+
+def test_recursion_limit_fallback_generates_real_hitl_ticket() -> None:
+    """Verify that hitting GraphRecursionError creates an actual TKT- handoff ticket."""
+    looping_model = MagicMock(spec=BaseChatModel)
+    looping_model.bind_tools.return_value = looping_model
+    looping_model.invoke.return_value = AIMessage(
+        content="",
+        tool_calls=[{"name": "get_active_promotions", "args": {}, "id": "infinite_loop_call"}],
+    )
+
+    settings = Settings()
+    cache = SemanticCache(embeddings=DeterministicMockEmbeddings(), settings=settings)
+    agent = EmporioAgent(
+        settings=settings,
+        model=looping_model,
+        semantic_cache=cache,
+        recursion_limit=4,
+    )
+
+    result = agent.run("Quais promoções estão ativas?", session_id="loop_session")
+
+    assert result.requires_human_intervention is True
+    assert result.escalation_ticket is not None
+    assert result.escalation_ticket["ticket_id"].startswith("TKT-")
+    assert result.telemetry.escalation_ticket_id == result.escalation_ticket["ticket_id"]
+    assert result.escalation_ticket["ticket_id"] in result.output_text
+
+
+def test_anti_phantom_hitl_guard_creates_ticket_when_llm_claims_transfer_without_tool() -> None:
+    """Verify finalize_node auto-creates a real HITL ticket if LLM promises transfer without tool."""
+    phantom_model = MagicMock(spec=BaseChatModel)
+    phantom_model.bind_tools.return_value = phantom_model
+    phantom_model.invoke.return_value = AIMessage(
+        content=(
+            "Como envolve queda recente, vou registrar o seu caso e transferir o atendimento "
+            "para um especialista humano da nossa equipe. Um momento, já acionarei o suporte!"
+        ),
+        usage_metadata={"input_tokens": 90, "output_tokens": 35, "total_tokens": 125},
+    )
+
+    settings = Settings()
+    cache = SemanticCache(embeddings=DeterministicMockEmbeddings(), settings=settings)
+    agent = EmporioAgent(settings=settings, model=phantom_model, semantic_cache=cache)
+
+    result = agent.run(
+        "Comprei uma guitarra há 45 dias, o captador parou e ela caiu semana passada.",
+        session_id="phantom_hitl_session",
+    )
+
+    assert result.requires_human_intervention is True
+    assert "escalate_to_human" in result.tools_called
+    assert result.escalation_ticket is not None
+    ticket_id = result.escalation_ticket["ticket_id"]
+    assert ticket_id.startswith("TKT-")
+    assert ticket_id in result.output_text
+    assert result.telemetry.escalation_ticket_id == ticket_id
