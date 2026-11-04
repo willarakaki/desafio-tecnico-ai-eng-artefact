@@ -430,26 +430,6 @@ class LLMFactory:
         return p_tagged.with_fallbacks(fb_tagged_list)
 
     @_ClassOrInstanceMethod
-    def get_resilient_synthesizer_llm(
-        self: Any,
-        tools: list[Any] | None = None,
-        temperature: float = 0.2,
-        settings: Settings | None = None,
-    ) -> Runnable:
-        """Return a resilient synthesizer Runnable combining primary and configured fallbacks."""
-        active_settings = LLMFactory._resolve_settings(self, settings)
-        primary = LLMFactory.get_synthesizer_llm(temperature=temperature, settings=active_settings)
-        fallbacks = LLMFactory.get_fallback_llms(
-            model_type="synthesizer", temperature=temperature, settings=active_settings
-        )
-        return LLMFactory.create_resilient_chain(
-            primary=primary,
-            fallbacks=fallbacks,
-            tools=tools,
-            primary_provider=active_settings.llm_provider,
-        )
-
-    @_ClassOrInstanceMethod
     def get_embeddings(
         self: Any,
         settings: Settings | None = None,

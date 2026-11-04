@@ -37,6 +37,18 @@ class PIIAnonymizer:
         "PHONE_NUMBER": "[PHONE_REDACTED]",
     }
 
+    # Official store institutional contacts (excluded from customer PII redaction)
+    INSTITUTIONAL_PHONES_DIGITS: ClassVar[set[str]] = {
+        "6733214500",
+        "6733414444",
+        "33214500",
+        "33414444",
+    }
+    INSTITUTIONAL_EMAILS: ClassVar[set[str]] = {
+        "contato@emporiodamusica.com.br",
+        "contato@empóriodamusica.com.br",
+    }
+
     # Formatted Brazilian CPF: 123.456.789-01
     FORMATTED_CPF_REGEX: ClassVar[re.Pattern[str]] = re.compile(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b")
 
@@ -174,6 +186,9 @@ class PIIAnonymizer:
                 continue
 
             matched_text = match.group()
+            if matched_text.strip().lower() in self.INSTITUTIONAL_EMAILS:
+                continue
+
             entities.append(
                 PIIEntityResult(
                     entity_type="EMAIL_ADDRESS",
@@ -196,6 +211,13 @@ class PIIAnonymizer:
                     matched_text = match.group()
 
                 if _is_overlapping(start, end):
+                    continue
+
+                # Exclude official institutional phones from redaction
+                digits = re.sub(r"\D", "", matched_text)
+                if digits in self.INSTITUTIONAL_PHONES_DIGITS or any(
+                    digits.endswith(p) for p in self.INSTITUTIONAL_PHONES_DIGITS
+                ):
                     continue
 
                 # Basic sanity check on digit count (between 8 and 13 digits)

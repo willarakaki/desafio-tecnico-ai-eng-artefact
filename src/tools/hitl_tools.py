@@ -124,10 +124,6 @@ class HandoffTicketRegistry:
                 return ticket
         return None
 
-    def list_all(self) -> list[HandoffTicket]:
-        """Return all generated tickets in chronological order."""
-        return list(self._tickets)
-
     def clear(self) -> None:
         """Clear all registered tickets."""
         self._tickets.clear()

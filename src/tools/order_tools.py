@@ -44,15 +44,6 @@ def _is_valid_cpf_digits(digits_str: str) -> bool:
     return d[10] == d2
 
 
-def _is_cpf(text: str) -> bool:
-    """Check if the text matches standard Brazilian CPF formatting or valid 11-digit checksum."""
-    clean = text.strip()
-    if CPF_FORMATTED_REGEX.match(clean):
-        return True
-    digits = re.sub(r"\D", "", clean)
-    return bool(len(digits) == 11 and _is_valid_cpf_digits(digits))
-
-
 class GetOrderStatusInput(BaseModel):
     """Input parameters for querying order status."""
 
@@ -431,22 +422,36 @@ def get_order_status(
         # Craft human-readable status message for the agent
         first_order = orders[0]
         if len(orders) == 1:
-            msg_parts = [
-                f"Pedido #{first_order.order_id} ({first_order.customer_name}, "
-                f"{first_order.customer_city}) em {first_order.order_date}: "
-                f"Status '{first_order.status_label}', total R$ {first_order.total_brl:.2f} "
-                f"via {first_order.payment_method}."
-            ]
-            if first_order.tracking_code:
-                msg_parts.append(f"Código de rastreamento: {first_order.tracking_code}.")
-            if first_order.estimated_delivery:
-                msg_parts.append(f"Previsão estimada de entrega: {first_order.estimated_delivery}.")
-            if first_order.notes:
-                msg_parts.append(f"Observações: '{first_order.notes}'.")
+            if not customer_identifier:
+                # Strict LGPD / Anti-IDOR barrier when querying without customer verification
+                msg_parts = [
+                    f"Pedido #{first_order.order_id} em {first_order.order_date}: "
+                    f"Status '{first_order.status_label}'. "
+                    f"[AVISO DE SEGURANÇA E PRIVACIDADE LGPD: O usuário consultou apenas o número do pedido "
+                    f"sem fornecer e-mail ou telefone cadastrado para autenticação. NÃO divulgue o nome completo "
+                    f"do titular ({first_order.customer_name}), cidade ({first_order.customer_city}) ou código "
+                    f"de rastreamento ({first_order.tracking_code or 'N/A'}) a terceiros. Solicite educadamente "
+                    f"que o cliente confirme o e-mail ou o telefone cadastrado no pedido antes de revelar esses detalhes.]"
+                ]
+            else:
+                msg_parts = [
+                    f"Pedido #{first_order.order_id} ({first_order.customer_name}, "
+                    f"{first_order.customer_city}) em {first_order.order_date}: "
+                    f"Status '{first_order.status_label}', total R$ {first_order.total_brl:.2f} "
+                    f"via {first_order.payment_method}."
+                ]
+                if first_order.tracking_code:
+                    msg_parts.append(f"Código de rastreamento: {first_order.tracking_code}.")
+                if first_order.estimated_delivery:
+                    msg_parts.append(
+                        f"Previsão estimada de entrega: {first_order.estimated_delivery}."
+                    )
+                if first_order.notes:
+                    msg_parts.append(f"Observações: '{first_order.notes}'.")
 
-            if first_order.items:
-                item_descs = [f"{it.quantity}x {it.product_name}" for it in first_order.items]
-                msg_parts.append(f"Itens do pedido: {', '.join(item_descs)}.")
+                if first_order.items:
+                    item_descs = [f"{it.quantity}x {it.product_name}" for it in first_order.items]
+                    msg_parts.append(f"Itens do pedido: {', '.join(item_descs)}.")
 
             message = " ".join(msg_parts)
         else:

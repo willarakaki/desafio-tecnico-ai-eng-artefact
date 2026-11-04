@@ -359,8 +359,8 @@ def test_pii_anonymizer_phone_masking(anonymizer: PIIAnonymizer) -> None:
             "Meu WhatsApp é [PHONE_REDACTED] para contato.",
         ),
         (
-            "Ligue no fixo (67) 3341-4444 da loja.",
-            "Ligue no fixo [PHONE_REDACTED] da loja.",
+            "Ligue no fixo (67) 3300-1122 do cliente.",
+            "Ligue no fixo [PHONE_REDACTED] do cliente.",
         ),
         (
             "Atendimento via +55 67 98888-7777 agora.",
@@ -376,6 +376,20 @@ def test_pii_anonymizer_phone_masking(anonymizer: PIIAnonymizer) -> None:
         masked = anonymizer.anonymize(raw)
         assert masked == expected
         assert anonymizer.has_phone(raw) is True
+
+
+def test_pii_anonymizer_preserves_institutional_contacts(anonymizer: PIIAnonymizer) -> None:
+    """Verify that official store contact channels are never redacted as customer PII."""
+    text = (
+        "Nosso WhatsApp de suporte é (67) 3321-4500, telefone da loja física (67) 3341-4444 "
+        "e email contato@emporiodamusica.com.br."
+    )
+    sanitized = anonymizer.anonymize(text)
+    assert "(67) 3321-4500" in sanitized
+    assert "(67) 3341-4444" in sanitized
+    assert "contato@emporiodamusica.com.br" in sanitized
+    assert "[PHONE_REDACTED]" not in sanitized
+    assert "[EMAIL_REDACTED]" not in sanitized
 
 
 def test_pii_anonymizer_complex_multi_entity_sentence(anonymizer: PIIAnonymizer) -> None:
@@ -559,6 +573,7 @@ def test_semantic_cache_strict_pii_bypass(semantic_cache: SemanticCache, pii_que
         "O teclado Yamaha está disponível no estoque?",
         "Ainda tem guitarra Strinberg?",
         "Qual o estoque atual da bateria Michael?",
+        "Quais violões vocês têm disponíveis em estoque por até 1500 reais?",
     ],
 )
 def test_semantic_cache_strict_stock_inventory_bypass(

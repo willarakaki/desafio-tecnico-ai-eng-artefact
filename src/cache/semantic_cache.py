@@ -107,11 +107,12 @@ class SemanticCache:
     ]
 
     STOCK_INVENTORY_PATTERNS: ClassVar[list[re.Pattern[str]]] = [
-        re.compile(r"\b(tem|h[aá])\s+em\s+estoque\b", re.IGNORECASE),
+        re.compile(r"\b(tem|t[eê]m|h[aá])\s+(dispon[ií]ve(l|is)\s+)?em\s+estoque\b", re.IGNORECASE),
+        re.compile(r"\bdispon[ií]ve(l|is)\s+(no|em)\s+estoque\b", re.IGNORECASE),
         re.compile(r"\bquant(as|os)\s+unidades\b", re.IGNORECASE),
-        re.compile(r"\bdispon[ií]vel\s+no\s+estoque\b", re.IGNORECASE),
-        re.compile(r"\b(qual\s+o|tem)\s+estoque\b", re.IGNORECASE),
-        re.compile(r"\bainda\s+tem\b", re.IGNORECASE),
+        re.compile(r"\b(qual\s+o|tem|t[eê]m)\s+estoque\b", re.IGNORECASE),
+        re.compile(r"\bainda\s+(tem|t[eê]m)\b", re.IGNORECASE),
+        re.compile(r"\b(em\s+estoque|no\s+estoque)\b", re.IGNORECASE),
     ]
 
     def __init__(

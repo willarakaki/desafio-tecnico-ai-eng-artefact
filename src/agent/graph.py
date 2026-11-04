@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import Generator
@@ -34,11 +35,28 @@ from src.security.guardrails import InputGuardrail, get_input_guardrail
 from src.security.pii_anonymizer import PIIAnonymizer, get_pii_anonymizer
 from src.security.rate_limiter import SlidingWindowRateLimiter, get_rate_limiter
 from src.tools.catalog_tools import create_catalog_tools
-from src.tools.hitl_tools import create_hitl_tools
+from src.tools.hitl_tools import create_hitl_tools, escalate_to_human
 from src.tools.order_tools import create_order_tools
 from src.tools.policy_tools import create_policy_tools
 
 logger = logging.getLogger(__name__)
+
+_PHANTOM_HITL_PATTERN = re.compile(
+    r"(?:"
+    r"vou\s+(?:registrar\s+[^.!?\n]{0,60}?\s+e\s+)?(?:transferir|encaminhar|acionar)|"
+    r"j[aá]\s+(?:transferi|encaminhei|acionei|acionarei)|"
+    r"estou\s+(?:transferindo|encaminhando|acionando)|"
+    r"abri\s+um\s+chamado"
+    r")\s+[^.!?\n]{0,90}?"
+    r"(?:especialista\s+humano|equipe\s+humana|suporte\s+especializado|"
+    r"atendente\s+humano|ger[eê]ncia|supervis[aã]o)",
+    re.IGNORECASE,
+)
+
+
+def _claims_unbacked_human_transfer(text: str) -> bool:
+    """Detect if LLM text promises an active human transfer without calling `escalate_to_human`."""
+    return bool(_PHANTOM_HITL_PATTERN.search(text))
 
 
 # ============================================================================
@@ -403,11 +421,49 @@ def build_emporio_graph(
                 latest_query = str(m.content).strip()
                 break
 
+        # Deterministic anti-phantom-HITL guard: if the LLM promised an active human
+        # transfer in text without invoking `escalate_to_human`, generate a real ticket.
+        if (
+            not requires_hitl
+            and not guardrail_blocked
+            and cache_status != "HIT"
+            and _claims_unbacked_human_transfer(sanitized_output)
+        ):
+            logger.warning(
+                "Detected unbacked human transfer claim in session '%s'; auto-creating HITL ticket.",
+                session_id,
+            )
+            auto_escalation = escalate_to_human(
+                reason="Transferência para especialista solicitada durante síntese consultiva",
+                case_summary=anonymizer.anonymize(latest_query or sanitized_output[:240]),
+                urgency_level="medium",
+            )
+            requires_hitl = True
+            ticket = auto_escalation.ticket.model_dump()
+            ticket_id = auto_escalation.ticket.ticket_id
+            tools_called = [*tools_called, "escalate_to_human"]
+            sanitized_output = (
+                f"{sanitized_output.rstrip()}\n\n"
+                f"📋 **Protocolo registrado:** `{ticket_id}` "
+                "(nossa equipe humana assumirá o atendimento em até 24 horas úteis)."
+            )
+
         # Populate cache on eligible cache MISS
         can_cache = False
         if latest_query:
             should_by, _ = semantic_cache.check_bypass(latest_query)
             can_cache = not should_by
+
+        # Strict data freshness guard: Never cache responses generated from dynamic database lookups or human escalation
+        transactional_tool_names = {
+            "search_products",
+            "get_product_details",
+            "get_active_promotions",
+            "get_order_status",
+            "escalate_to_human",
+        }
+        if any(t in transactional_tool_names for t in tools_called):
+            can_cache = False
 
         if (
             cache_status == "MISS"
@@ -461,6 +517,9 @@ def build_emporio_graph(
         return {
             "output_text": sanitized_output,
             "estimated_cost_usd": cost_usd,
+            "requires_human_intervention": requires_hitl,
+            "escalation_ticket": ticket,
+            "tools_called": tools_called,
         }
 
     # ------------------------------------------------------------------------
@@ -530,9 +589,12 @@ class EmporioAgent:
         anonymizer: PIIAnonymizer | None = None,
         telemetry_manager: TelemetryManager | None = None,
         checkpointer: BaseCheckpointSaver | None = None,
-        recursion_limit: int = 6,
+        recursion_limit: int = 16,
     ) -> None:
         self.settings = settings or get_settings()
+        logging.getLogger("src").setLevel(
+            getattr(logging, self.settings.log_level.upper(), logging.INFO)
+        )
         self.duckdb_manager = duckdb_manager or get_duckdb_manager(data_dir=self.settings.data_dir)
         self.retriever = retriever or get_hybrid_retriever()
         self.rate_limiter = rate_limiter or get_rate_limiter(settings=self.settings)
@@ -618,18 +680,27 @@ class EmporioAgent:
                 self.recursion_limit,
                 session_id,
             )
+            escalation_res = escalate_to_human(
+                reason="Solicitação multietapas excedeu o limite de iterações automáticas",
+                case_summary=self.anonymizer.anonymize(query[:300]),
+                urgency_level="high",
+            )
+            ticket_data = escalation_res.ticket
             fallback_msg = (
-                "Sua solicitação exigiu mais etapas do que o limite permitido para o "
-                "atendimento automático. Para garantir que seu caso seja resolvido, transferi o "
-                "contato para nossa equipe humana pelo WhatsApp (67) 3321-4500."
+                "Sua solicitação exigiu múltiplas validações cruzadas além do limite automático. "
+                "Para garantir que seu caso seja resolvido com precisão, registrei o protocolo "
+                f"**{ticket_data.ticket_id}** para um especialista humano da nossa equipe assumir "
+                "neste atendimento em até 24 horas úteis (ou, se preferir contato imediato, "
+                "nosso WhatsApp direto é (67) 3321-4500)."
             )
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             telemetry = TurnTelemetry(
                 session_id=session_id,
                 latency_ms=round(elapsed_ms, 2),
                 cache_status="MISS",
-                tools_called=["recursion_limit_fallback"],
+                tools_called=["recursion_limit_fallback", "escalate_to_human"],
                 requires_human_intervention=True,
+                escalation_ticket_id=ticket_data.ticket_id,
                 provider=self.settings.llm_provider,
                 model_name="recursion_fallback",
             )
@@ -639,8 +710,9 @@ class EmporioAgent:
                 session_id=session_id,
                 cache_status="MISS",
                 requires_human_intervention=True,
+                escalation_ticket=ticket_data.model_dump(),
                 guardrail_blocked=False,
-                tools_called=["recursion_limit_fallback"],
+                tools_called=["recursion_limit_fallback", "escalate_to_human"],
                 telemetry=telemetry,
                 messages=[HumanMessage(content=query), AIMessage(content=fallback_msg)],
             )
@@ -739,7 +811,7 @@ class EmporioAgent:
             ):
                 for node_name, node_state in step_update.items():
                     final_state.update(node_state)
-                    if node_name == "guardrail_and_cache":
+                    if node_name in ("input_barrier", "guardrail_and_cache"):
                         if node_state.get("guardrail_blocked"):
                             yield {
                                 "event": "step",
@@ -803,18 +875,27 @@ class EmporioAgent:
                 self.recursion_limit,
                 session_id,
             )
+            escalation_res = escalate_to_human(
+                reason="Solicitação multietapas excedeu o limite de iterações automáticas",
+                case_summary=self.anonymizer.anonymize(query[:300]),
+                urgency_level="high",
+            )
+            ticket_data = escalation_res.ticket
             fallback_msg = (
-                "Sua solicitação exigiu mais etapas do que o limite permitido para o "
-                "atendimento automático. Para garantir que seu caso seja resolvido, transferi o "
-                "contato para nossa equipe humana pelo WhatsApp (67) 3321-4500."
+                "Sua solicitação exigiu múltiplas validações cruzadas além do limite automático. "
+                "Para garantir que seu caso seja resolvido com precisão, registrei o protocolo "
+                f"**{ticket_data.ticket_id}** para um especialista humano da nossa equipe assumir "
+                "neste atendimento em até 24 horas úteis (ou, se preferir contato imediato, "
+                "nosso WhatsApp direto é (67) 3321-4500)."
             )
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             telemetry = TurnTelemetry(
                 session_id=session_id,
                 latency_ms=round(elapsed_ms, 2),
                 cache_status="MISS",
-                tools_called=["recursion_limit_fallback"],
+                tools_called=["recursion_limit_fallback", "escalate_to_human"],
                 requires_human_intervention=True,
+                escalation_ticket_id=ticket_data.ticket_id,
                 provider=self.settings.llm_provider,
                 model_name="recursion_fallback",
             )
@@ -828,8 +909,9 @@ class EmporioAgent:
                     session_id=session_id,
                     cache_status="MISS",
                     requires_human_intervention=True,
+                    escalation_ticket=ticket_data.model_dump(),
                     guardrail_blocked=False,
-                    tools_called=["recursion_limit_fallback"],
+                    tools_called=["recursion_limit_fallback", "escalate_to_human"],
                     telemetry=telemetry,
                     messages=[HumanMessage(content=query), AIMessage(content=fallback_msg)],
                 ).model_dump(),

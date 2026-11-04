@@ -164,6 +164,10 @@ class Settings(BaseSettings):
         """Propagate LangSmith environment variables if tracing is enabled or API key is set."""
         import os
 
+        # Prevent LangSmith EnvAddressError collision between project and agent address
+        os.environ.pop("LANGSMITH_AGENT_ID", None)
+        os.environ.pop("LANGSMITH_AGENT_ENVIRONMENT", None)
+
         if self.langchain_api_key or self.langchain_tracing_v2:
             os.environ["LANGCHAIN_TRACING_V2"] = "true"
             os.environ["LANGCHAIN_TRACING"] = "true"

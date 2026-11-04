@@ -137,12 +137,6 @@ def get_agent() -> EmporioAgent:
     return _AGENT_SINGLETON
 
 
-def reset_api_agent() -> None:
-    """Reset the singleton agent instance (for hermetic testing)."""
-    global _AGENT_SINGLETON
-    _AGENT_SINGLETON = None
-
-
 # ============================================================================
 # FastAPI Application Factory
 # ============================================================================

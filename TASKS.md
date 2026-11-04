@@ -90,14 +90,14 @@
 
 ## [x] Task 8: Enterprise Backend — FastAPI REST & SSE Streaming API + Dockerization
 **Objective:** Deliver an enterprise-grade API tier aligning with production JD expectations (FastAPI backend wrapping LangGraph, Server-Sent Events streaming compatible with modern React/Next.js Vercel AI SDK, and 1-command Docker containerization).
-- [ ] Implement `src/api/server.py` with FastAPI:
+- [x] Implement `src/api/server.py` with FastAPI:
   - `POST /api/chat`: synchronous turn execution returning structured JSON with response, FinOps telemetry, tools called, and HITL tickets.
   - `POST /api/chat/stream`: Server-Sent Events (SSE) streaming endpoint returning chunked tokens and graph step events.
   - `GET /api/health`: production readiness/liveness probe checking DuckDB, Hybrid RAG, and LLM configuration.
   - `GET /api/metrics`: session-aggregated FinOps and telemetry metrics.
   - Interactive OpenAPI Swagger documentation (`/docs` and `/redoc`).
-- [ ] Create `Dockerfile` (optimized multi-stage or Python 3.11-slim) and `docker-compose.yml` supporting both FastAPI and Streamlit services.
-- [ ] Add unit and integration tests in `tests/test_api.py` validating all endpoints, status codes, and streaming responses using FastAPI `TestClient`.
+- [x] Create `Dockerfile` (optimized multi-stage or Python 3.11-slim) and `docker-compose.yml` supporting both FastAPI and Streamlit services.
+- [x] Add unit and integration tests in `tests/test_api.py` validating all endpoints, status codes, and streaming responses using FastAPI `TestClient`.
 - **Validation:** Confirm 100% of test suite passes and Docker image builds successfully.
 - **Commit:** `feat(api): implement enterprise FastAPI REST and SSE streaming server with Docker containerization`
 
