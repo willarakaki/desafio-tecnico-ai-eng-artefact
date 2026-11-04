@@ -101,9 +101,9 @@
 - **Validation:** Confirm 100% of test suite passes and Docker image builds successfully.
 - **Commit:** `feat(api): implement enterprise FastAPI REST and SSE streaming server with Docker containerization`
 
-## [ ] Task 9: Executive & Technical `README.md`
+## [x] Task 9: Executive & Technical `README.md`
 **Objective:** Consolidate all architectural justifications and operational instructions required by Artefact.
-- [ ] Write a comprehensive `README.md` in Portuguese (matching the challenge language) covering:
+- [x] Write a comprehensive `README.md` in English (meeting all official challenge guidelines) covering:
   - Executive summary, architecture topology, and Mermaid diagram.
   - Quickstart in 3 local commands (`uv`/`pip` with Streamlit or CLI) and 1 command via Docker (`docker compose up`).
   - OpenAPI Swagger documentation overview and React/Next.js Vercel AI SDK frontend integration example snippet.
