@@ -42,7 +42,7 @@
 **Empório da Música** is a musical instruments store in Campo Grande/MS whose support team is overloaded with repetitive customer questions: store opening hours, physical address, payment/installment rules, product prices and stock availability, order tracking, and return/warranty policies.
 
 ### Solving the Problem in the Simplest Reliable Way
-Rather than over-engineering with external databases, message brokers, or multi-agent swarms, we analyzed the actual provided datasets (`data/*.csv` and `data/políticas_da_loja.pdf`) first and chose the **simplest self-contained Python mechanism** capable of solving each real problem accurately:
+Rather than over-engineering with external databases, message brokers, or multi-agent swarms, I analyzed the actual provided datasets (`data/*.csv` and `data/políticas_da_loja.pdf`) first and chose the **simplest self-contained Python mechanism** capable of solving each real problem accurately:
 
 | Requirement in Scenario | Why Naive LLM Approaches Fail | Simplest Reliable Solution Chosen | Complex Infra Intentionally Avoided |
 | :--- | :--- | :--- | :--- |
@@ -225,13 +225,13 @@ uv run python scripts/generate_transcripts.py
 ---
 
 ### 4.3. Data Treatment & Structured Lookup (In-Memory DuckDB vs. Text-to-SQL)
-Before writing any code, we profiled all **6 operational CSV files** (`categories.csv` [9 rows], `products.csv` [65 rows], `promotions.csv` [25 rows], `customers.csv` [50 rows], `orders.csv` [20 rows], `order_items.csv` [22 rows]) and uncovered concrete data edge cases that guided our data treatment in `src/database/duckdb_manager.py`:
+Before writing any code, I profiled all **6 operational CSV files** (`categories.csv` [9 rows], `products.csv` [65 rows], `promotions.csv` [25 rows], `customers.csv` [50 rows], `orders.csv` [20 rows], `order_items.csv` [22 rows]) and uncovered concrete data edge cases that guided the data treatment in `src/database/duckdb_manager.py`:
 
 1. **Filename & Text Normalization:** Strips the `desafio_tecnico_ai_eng - ` filename prefix into clean relational tables, trims whitespace, and registers a custom `strip_accents` SQL macro so queries like `"violao"` match `"Violões"` seamlessly.
 2. **Stock vs. Status Contradictions:** Profiling revealed `product_id=96` (*Giannini GF-3D*) has `status='active'` with `stock_quantity=0`, whereas `product_id=136` (*Ibanez Bass 2X*) has `status='discontinued'` despite `stock_quantity=13`, and `product_id=130` has `status='coming_soon'` (`stock=2`). Consequently, `in_stock_only=True` strictly filters `status = 'active' AND stock_quantity > 0`.
-3. **Active vs. Expired Promotions:** Only **4 of 25** rows in `promotions.csv` have `is_active = 1` (`product_id` `90`, `94`, `121`, `127`). The remaining 21 rows—including *Takamine GD20* (`product_id=95`, `12%`, `is_active=0`)—are expired historical campaigns. Our catalog tools explicitly separate active promotions from expired ones so the agent never grants an inactive discount.
+3. **Active vs. Expired Promotions:** Only **4 of 25** rows in `promotions.csv` have `is_active = 1` (`product_id` `90`, `94`, `121`, `127`). The remaining 21 rows—including *Takamine GD20* (`product_id=95`, `12%`, `is_active=0`)—are expired historical campaigns. The catalog tools explicitly separate active promotions from expired ones so the agent never grants an inactive discount.
 4. **Empty Categories & Spec Variance:** Categories `6`, `7`, and `8` (wind and orchestral instruments) have `0` rows in `products.csv`, and rows `135..144` contain slight naming differences between `name`, `description`, and JSON `specs`. Search queries match across both `name` and `description` and return verbatim attributes.
-5. **Typed Pydantic v2 Tools instead of Free-Form SQL:** Rather than letting the LLM write raw SQL, we expose 4 strictly validated tools (`search_products`, `get_product_details`, `get_active_promotions`, `get_order_status`) using `100%` parameterized queries—eliminating SQL syntax errors and SQL injection by construction.
+5. **Typed Pydantic v2 Tools instead of Free-Form SQL:** Rather than letting the LLM write raw SQL, I exposed 4 strictly validated tools (`search_products`, `get_product_details`, `get_active_promotions`, `get_order_status`) using `100%` parameterized queries—eliminating SQL syntax errors and SQL injection by construction.
 
 ---
 
@@ -301,9 +301,9 @@ Each safeguard is a compact, single-module Python component solving a realistic 
 ---
 
 ### 4.9. Documented Assumptions on Ambiguous Cases
-Per the challenge guideline (*"assuma uma interpretação razoável, documente a suposição no README e siga em frente"*), we documented the following assumptions:
-1. **Order Identity Verification Without CPF Column:** `customers.csv` contains `name`, `phone`, `email`, and `city`, but no `cpf` column (and `bruno.martins@jmail.com` appears on two customer IDs: `11` and `43`). We assumed `order_id` paired with matching `email`, digits-normalized `phone`, or `name` as the verification key for order lookups, while still supporting CPF masking in chat logs for LGPD compliance if a customer types their CPF voluntarily.
-2. **Product Availability Definition:** Because `products.csv` contains both `active` items with `0` stock (`product_id=96`) and `discontinued` items with positive leftover stock (`product_id=136`), we assumed that *"available products"* recommended to customers must satisfy **both** `status = 'active'` AND `stock_quantity > 0`, while direct lookups (`get_product_details`) transparently report discontinued or out-of-stock status.
+Per the challenge guideline (*"assuma uma interpretação razoável, documente a suposição no README e siga em frente"*), I documented the following assumptions:
+1. **Order Identity Verification Without CPF Column:** `customers.csv` contains `name`, `phone`, `email`, and `city`, but no `cpf` column (and `bruno.martins@jmail.com` appears on two customer IDs: `11` and `43`). I assumed `order_id` paired with matching `email`, digits-normalized `phone`, or `name` as the verification key for order lookups, while still supporting CPF masking in chat logs for LGPD compliance if a customer types their CPF voluntarily.
+2. **Product Availability Definition:** Because `products.csv` contains both `active` items with `0` stock (`product_id=96`) and `discontinued` items with positive leftover stock (`product_id=136`), I assumed that *"available products"* recommended to customers must satisfy **both** `status = 'active'` AND `stock_quantity > 0`, while direct lookups (`get_product_details`) transparently report discontinued or out-of-stock status.
 3. **Language Split:** Following the submission instructions (*"All responses must be in English!"*) while respecting the Brazilian store scenario, all documentation, code, schemas, and architectural explanations are written in **English**, whereas the agent's customer-facing persona and the simulated customer dialogues in `transcripts/` are in **Brazilian Portuguese**.
 4. **Using All Provided Files:** Although using every table was optional, all 6 CSV tables exhibit `100%` referential integrity and directly enrich customer answers (joining `orders` + `order_items` + `products` + `customers`, and cross-checking `products` + `categories` + `promotions`), so all 6 CSVs and the full 8-page PDF were integrated.
 
@@ -337,9 +337,9 @@ To keep local setup simple, fast, and dependency-free for evaluation, the protot
 - **Simulated WhatsApp Channel:** Although the agent implements the exact WhatsApp persona from Section 7 of the policy manual and exposes REST/SSE endpoints, it is interacted with via CLI, Streamlit, or HTTP rather than a live Meta WhatsApp Business webhook.
 
 ### 6.2. What Would Be Done With More Time
-With additional time to evolve this prototype into a production system for Empório da Música, we would prioritize:
+With additional time to evolve this prototype into a production system for Empório da Música, I would prioritize:
 1. **Persistent Session Memory & Shared Cache:** Replace `MemorySaver` with `AsyncPostgresSaver` and move the Semantic Cache to **Redis Vector Search** with TTLs and automatic cache invalidation whenever product prices or promotions change.
-2. **Automated LLM Quality Evaluation (Ragas / DeepEval in CI):** Complement our 170 deterministic unit/integration tests with an automated evaluation dataset of 100+ realistic Portuguese customer conversations measuring *Faithfulness*, *Answer Relevancy*, and *Tool Selection Precision* on prompt/model changes.
+2. **Automated LLM Quality Evaluation (Ragas / DeepEval in CI):** Complement the 170 deterministic unit/integration tests with an automated evaluation dataset of 100+ realistic Portuguese customer conversations measuring *Faithfulness*, *Answer Relevancy*, and *Tool Selection Precision* on prompt/model changes.
 3. **WhatsApp Business Cloud API Integration:** Connect the FastAPI server to Meta's official WhatsApp webhook (including audio message transcription for voice notes, which are common in Brazilian retail WhatsApp support) and connect `escalate_to_human` directly to the store team's shared inbox/CRM.
 4. **Live ERP Synchronization & Pre-Built Vector Index:** Sync DuckDB/PostgreSQL with the store's live inventory/POS system and persist FAISS embeddings on build to eliminate cold-start indexing latency.
 5. **Lightweight Local Classifier for Edge-Case Guardrails:** Add a small dedicated safety model (e.g., *Llama Prompt Guard 2*) for low-latency semantic jailbreak detection without extra commercial LLM calls.
@@ -348,17 +348,17 @@ With additional time to evolve this prototype into a production system for Empó
 
 ## 7. AI Coding Assistant Disclosure & Engineering Workflow
 
-In accordance with the challenge deliverable guidelines, we disclose the use of **Google Antigravity** as our AI coding assistant during development, operating under a structured, human-led **Spec-Driven + Test-Driven Development (TDD)** workflow.
+In accordance with the challenge deliverable guidelines, I disclose the use of **Google Antigravity** as my AI coding assistant during development, operating under a structured, human-led **Spec-Driven + Test-Driven Development (TDD)** workflow.
 
 ### How the Assistant Was Used (Workflow)
 Rather than generating monolithic code from vague prompts, the engineering workflow was structured into explicit human-controlled stages:
 
 1. **Upfront Data Inspection & Architecture Design (Human-Led):**  
-   Before writing application code, we inspected every CSV schema, row count, promotion flag, stock anomaly, and all 8 pages of `políticas_da_loja.pdf`. Those findings and architectural boundaries were codified in [`docs/architecture.md`](docs/architecture.md) and workspace engineering rules in [`AGENTS.md`](AGENTS.md) (e.g., *no raw LLM-generated SQL*, *no hardcoded API keys*, *strict transactional cache bypass*).
+   Before writing application code, I inspected every CSV schema, row count, promotion flag, stock anomaly, and all 8 pages of `políticas_da_loja.pdf`. Those findings and architectural boundaries were codified in [`docs/architecture.md`](docs/architecture.md) and workspace engineering rules in [`AGENTS.md`](AGENTS.md) (e.g., *no raw LLM-generated SQL*, *no hardcoded API keys*, *strict transactional cache bypass*).
 2. **Atomic Task Decomposition (`TASKS.md`):**  
    The solution was broken down into incremental, reviewable milestones (Tasks 0 through 9: Setup & Profiling $\rightarrow$ Config/`LLMFactory` $\rightarrow$ DuckDB Tools $\rightarrow$ Hybrid RAG $\rightarrow$ Guardrails/Cache/PII $\rightarrow$ LangGraph & HITL $\rightarrow$ CLI/Streamlit UI $\rightarrow$ Failover & Transcripts $\rightarrow$ FastAPI/Docker $\rightarrow$ Documentation).
 3. **Custom TDD Quality Gate Skill (`.agents/skills/tdd-commit-gate/SKILL.md`):**  
-   We authored a custom workspace skill instructing the assistant to work on one dedicated Git branch per task, run `ruff check` / `ruff format`, validate every module with deterministic `pytest` unit and integration tests (170 tests total, offline-capable via mock LLMs/embeddings), and push atomic branches for **manual human Pull Request review and GitHub Actions CI verification** before merging into `main`.
+   I authored a custom workspace skill instructing the assistant to work on one dedicated Git branch per task, run `ruff check` / `ruff format`, validate every module with deterministic `pytest` unit and integration tests (170 tests total, offline-capable via mock LLMs/embeddings), and push atomic branches for **manual human Pull Request review and GitHub Actions CI verification** before merging into `main`.
 
 This workflow kept full architectural and logical control in human hands while accelerating boilerplate, test coverage, and documentation polish.
 
