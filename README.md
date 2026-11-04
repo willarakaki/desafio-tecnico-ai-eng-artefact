@@ -37,7 +37,7 @@
 6. [FinOps & Observability](#6-finops--observability)
 7. [AI Coding Assistant Disclosure (Google Antigravity Workflow)](#7-ai-coding-assistant-disclosure-google-antigravity-workflow)
 8. [Multi-Turn Interaction Transcripts (`transcripts/`)](#8-multi-turn-interaction-transcripts-transcripts)
-9. [Known Limitations & Production Roadmap](#9-known-limitations--production-roadmap)
+9. [Known Limitations & What We Would Do With More Time](#9-known-limitations--what-we-would-do-with-more-time)
 10. [Repository Structure](#10-repository-structure)
 
 ---
@@ -432,15 +432,37 @@ Five realistic multi-turn interaction scenarios were executed against the real a
 
 ---
 
-## 9. Known Limitations & Production Roadmap
+## 9. Known Limitations & What We Would Do With More Time
 
-| Current Limitation | Technical Root Cause | Production Roadmap Solution |
+### 9.1. Current Known Limitations & Technical Root Causes
+
+| Current Limitation | Technical Root Cause | Impact on Current Prototype |
 | :--- | :--- | :--- |
-| **In-Memory Semantic Cache** | Single-node ephemeral dict; cache clears on process restart. | Migrate to **Redis Vector Search** or **Valkey** cluster with TTL and distributed invalidation. |
-| **Multi-Turn Memory Storage** | LangGraph `MemorySaver` keeps state in process RAM. | Replace with PostgreSQL checkpointer (`AsyncPostgresSaver`) for horizontal scaling. |
-| **Channel Connectivity** | Interfaces currently limited to Streamlit, CLI, and REST/SSE. | Deploy official **WhatsApp Business API (Cloud API)** webhook using **Model Context Protocol (MCP)**. |
-| **Specialized Safety Model** | Guardrails use regex + lightweight LLM intent check. | Deploy **Llama Prompt Guard 2 (86M)** via vLLM for sub-10ms deterministic jailbreak scoring at zero token cost. |
-| **Continuous Model Quality** | Manual review of test scenarios and pytest fixtures. | Implement automated continuous evaluation in GitHub Actions CI using **Ragas** and **DeepEval** against synthetic test sets. |
+| **In-Memory Semantic Cache** | Single-node ephemeral dictionary; cache clears when the process restarts. | Suitable for single-instance deployments; cache is repopulated on startup without persistence. |
+| **Multi-Turn Memory Storage** | LangGraph `MemorySaver` stores thread state in RAM. | Conversations persist during container uptime, but horizontal pod autoscaling requires a shared backend. |
+| **Channel Connectivity** | Interfaces currently cover Streamlit UI, Rich CLI, and FastAPI REST/SSE. | Direct messaging channels (e.g., WhatsApp Business API) are simulated via API endpoints rather than live webhooks. |
+| **Specialized Safety Layer** | Guardrails rely on regex patterns and deterministic heuristics. | Effectively blocks standard SQLi, prompt extraction, and known jailbreaks, but adversarial edge cases benefit from dedicated neural classifiers. |
+| **Continuous Model Quality** | Validation relies on 170 deterministic unit/integration tests and fixtures. | Full regression guarantees exist for logic and routing, but synthetic LLM-as-a-judge quality scoring is not yet wired into CI. |
+
+---
+
+### 9.2. What We Would Do With More Time (Production Roadmap)
+
+If allocated additional sprint time or transitioning this solution into an enterprise production environment, we would execute the following prioritized roadmap:
+
+1. **Distributed Vector Cache & Persistent Checkpointing:**
+   - Replace in-memory cosine cache with **Redis Vector Search** or **Valkey** cluster with time-to-live (TTL) policies and event-driven invalidation when catalog prices or inventory change in the operational database.
+   - Replace `MemorySaver` with **`AsyncPostgresSaver`** in LangGraph to enable zero-downtime rolling deploys and horizontal scaling across multiple container replicas.
+
+2. **Official WhatsApp Business Cloud API & Model Context Protocol (MCP):**
+   - Implement an enterprise webhook receiver for the **Meta WhatsApp Cloud API**, including media message handling (audio transcription via Whisper and receipt image OCR).
+   - Package internal store tools (DuckDB catalog, order tracking, carrier APIs) as standardized **MCP Servers** (Model Context Protocol), allowing seamless interoperability across omnichannel support interfaces.
+
+3. **Dedicated Sub-10ms Safety Microservice:**
+   - Deploy **Llama Prompt Guard 2 (86M)** or **NeMo Guardrails** via **vLLM** on a lightweight CPU/GPU container to classify prompt injections, jailbreaks, and toxicity in sub-10ms with zero commercial API token cost.
+
+4. **Continuous Quality & Hallucination Evaluation (Ragas & DeepEval):**
+   - Integrate an automated CI/CD evaluation harness in GitHub Actions using **Ragas** and **DeepEval** to test synthetic variations of customer inquiries against a ground-truth benchmark, tracking semantic drift, faithfulness, and tool-selection accuracy over time.
 
 ---
 
